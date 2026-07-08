@@ -10,7 +10,8 @@ from deckflow.service.import_service import import_deck
 from deckflow.service.queue_service import build_daily_queue
 from deckflow.service.review_service import submit_review
 
-ADVANCED = Path(__file__).parent.parent / "examples" / "advanced_sample_deck.md"
+ADVANCED = Path(__file__).parent.parent / "examples" / "legacy" / "advanced_sample_deck.md"
+V2_PROJECT = Path(__file__).parent.parent / "examples" / "python-de-interview"
 
 
 @pytest.fixture()

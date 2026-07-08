@@ -1,17 +1,19 @@
 # Architecture
 
-Deckflow is a local-first, data-centric spaced repetition system. Markdown decks are
-the source of truth; SQLite stores scheduling state, review telemetry, and derived
-analytics.
+Deckflow is a local-first, data-centric spaced repetition system. Deck content is
+defined in versioned **deck projects** (v2) or monolithic markdown files (v1/legacy);
+SQLite stores scheduling state, review telemetry, and derived analytics.
 
 ## Layer overview
 
 ```
-markdown deck
-    → parser (legacy / v1)
+deck project / markdown
+    → extract (v2 card files, v1/legacy adapters)
+    → compiler (loader → resolver → validator)
+    → CompiledCollection
     → import_service
     → repository (SQLite)
-    → services (review, queue, analytics, stats)
+    → services (review, queue, analytics, stats, library)
     → cli / api (thin adapters)
     → web (React UI via FastAPI proxy)
 ```
@@ -20,54 +22,87 @@ markdown deck
 
 | Layer | Path | Responsibility |
 |-------|------|----------------|
-| Parser | `deckflow/parser/` | Parse legacy and v1/v1.1 markdown into `ParsedDeck` |
-| Models | `deckflow/models/` | Dataclasses for parsed input and DB rows |
-| DB | `deckflow/db/` | Schema, migrations, all SQL in `repository.py` |
+| Schemas | `deckflow/schemas/` | Pydantic models for project specs and compiled output |
+| Extract | `deckflow/extract/` | Format adapters: v2 card files, v1 markdown, legacy |
+| Compiler | `deckflow/compiler/` | Load, resolve inheritance, validate, compile |
+| Parser | `deckflow/parser/` | Backward-compat re-exports for v1/legacy parsing |
+| Models | `deckflow/models/` | Dataclasses for DB rows and parsed input |
+| DB | `deckflow/db/repository/` | Schema, migrations, SQL access (split by domain) |
 | Scheduler | `deckflow/scheduler/` | FSRS wrapper for card scheduling |
-| Services | `deckflow/service/` | Business logic — import, review, queue, analytics |
-| CLI | `cli/` | Typer commands for terminal workflow |
+| Services | `deckflow/service/` | Business logic — import, review, queue, analytics, library |
+| CLI | `cli/` | Typer commands including validate, compile, migrate |
 | API | `api/` | FastAPI REST endpoints for the web UI |
 | Web | `web/` | React + Vite frontend |
+
+## Compile pipeline (v2)
+
+```mermaid
+flowchart LR
+  manifest[deckflow.yaml] --> loader[ProjectLoader]
+  loader --> cards[card files]
+  loader --> decks[deck yaml]
+  loader --> collection[collection yaml]
+  cards --> resolver[Resolver]
+  decks --> resolver
+  collection --> resolver
+  resolver --> validator[Validator]
+  validator --> compiled[CompiledCollection]
+  compiled --> importSvc[import_service]
+  importSvc --> sqlite[(SQLite)]
+```
+
+v1/legacy markdown files bypass the project loader and use `extract/markdown_v1.py`
+to produce the same `CompiledCollection` shape.
 
 ## Data flow
 
 ### Import
 
-1. `parse_markdown_deck_text()` detects v1 frontmatter or legacy format.
-2. `import_service.import_deck()` upserts collections, decks, cards, and concepts.
-3. `repository.upsert_card()` creates scheduling rows (new cards due immediately).
+1. `compile_path()` auto-detects project, collection dir, or markdown file.
+2. `import_compiled()` upserts collections, decks, cards, and concepts.
+3. `repository.upsert_card()` creates scheduling rows for new cards.
 
 ### Review
 
-1. `queue_service.build_daily_queue()` scores due cards by urgency, weakness, priority.
+1. `queue_service.build_daily_queue()` scores due cards (optional `ReviewFocus` filter).
 2. `review_service.get_next_card()` returns the top queued card.
-3. On rating, FSRS updates scheduling; telemetry is recorded; concept mastery refreshes.
+3. On rating, FSRS updates scheduling; telemetry recorded; concept mastery refreshes.
+
+### Learning Library
+
+1. `library_service.get_learning_library()` builds deck module trie, concept topic tree, and track progress.
+2. Deck paths roll up due/total counts at every `::` prefix.
+3. Study tracks from collection `meta_json.tracks` expose current step focus for CLI/web.
 
 ### Analytics
 
-- `concept_mastery` table stores per-concept retention and weakness scores.
-- `analytics_service` aggregates overview stats, weak spots, and per-card history.
-- `/study-plan/today` exposes the smart queue to the web UI.
+- `concept_mastery` stores per-concept retention and weakness.
+- `analytics_service` aggregates overview, weak spots, and per-card history.
 
 ## Extension points
 
 | Change | Touch points |
 |--------|--------------|
-| New card field | `docs/DECK_FORMAT.md`, `deckflow/parser/v1.py`, `ParsedCard`, import path |
-| New analytics | `repository.py` query + `analytics_service.py` + API route + web page |
-| New CLI command | `cli/main.py` calling an existing service |
-| Schema change | `deckflow/db/schema.py`, `_migrate()` in repository, tests |
+| New card field | `deckflow/schemas/specs.py` (CardSpec), `deckflow/extract/card_file.py`, import path |
+| New validation rule | `deckflow/compiler/validator.py`, `schema.yaml` spec in docs |
+| New analytics | `repository/analytics.py` + `analytics_service.py` + API + web |
+| Schema change | `deckflow/db/schema.py`, `_migrate()` in `repository/base.py`, tests |
 
 ## Maintainability rules
 
-- **Service layer only** for business logic; CLI and API stay thin adapters.
-- **No raw SQL outside** `deckflow/db/repository.py` (future: split into submodules).
-- **Schema changes** require a migration in `_migrate()` plus a test.
-- **Deck format changes** require spec + example deck + parser test.
-- **Semver:** `0.x` until stable deck format + API; minor for features, patch for fixes.
+- **Service layer only** for business logic; CLI and API stay thin.
+- **No raw SQL outside** `deckflow/db/repository/`.
+- **Schema changes** require migration + test.
+- **Deck format changes** require Pydantic schema + docs + example + tests.
+- **Semver:** `0.x` until stable; minor for features, patch for fixes.
 
-## Future work
+## Repository package layout
 
-- Split `repository.py` (~800 lines) into `collections.py`, `concepts.py`, `reviews.py`
-- Optional sync / multi-device support
-- Plugin hooks for custom card renderers
+| Module | Responsibility |
+|--------|----------------|
+| `base.py` | Connection, initialize, migrations |
+| `collections.py` | Collection CRUD |
+| `concepts.py` | Concepts and card-concept links |
+| `cards.py` | Decks, cards, scheduling queries, focus filters |
+| `reviews.py` | Sessions and review records |
+| `analytics.py` | Mastery, stats, retention |

@@ -171,3 +171,63 @@ class StudyPlanItem:
     front_preview: str
     reason: str
     score: float
+
+
+@dataclass
+class ReviewFocus:
+    deck_prefix: str | None = None
+    concept_slug: str | None = None
+    track_id: str | None = None
+
+
+@dataclass
+class CollectionSummary:
+    id: int
+    slug: str
+    title: str
+    description: str | None
+    due_count: int
+    card_count: int
+
+
+@dataclass
+class LibraryNode:
+    id: str
+    label: str
+    kind: str
+    path: str | None = None
+    slug: str | None = None
+    due_count: int = 0
+    card_count: int = 0
+    mastery_score: float | None = None
+    children: list[LibraryNode] = field(default_factory=list)
+
+
+@dataclass
+class TrackStepSummary:
+    step_index: int
+    step_type: str
+    match: str
+    due_count: int
+    card_count: int
+    completed: bool
+
+
+@dataclass
+class TrackSummary:
+    id: str
+    title: str
+    description: str | None
+    current_step: int
+    total_steps: int
+    steps: list[TrackStepSummary]
+    focus_deck_prefix: str | None = None
+    focus_concept_slug: str | None = None
+
+
+@dataclass
+class LearningLibrary:
+    collection: CollectionSummary | None
+    modules: list[LibraryNode]
+    topics: list[LibraryNode]
+    tracks: list[TrackSummary]

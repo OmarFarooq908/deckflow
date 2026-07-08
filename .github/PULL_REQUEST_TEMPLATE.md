@@ -20,7 +20,7 @@
 ## Deck format impact
 
 - [ ] No deck format changes
-- [ ] Deck format updated — `docs/DECK_FORMAT.md` and `examples/advanced_sample_deck.md` updated
+- [ ] Deck format updated — `docs/DECK_PROJECT.md` or `docs/DECK_FORMAT.md` and examples updated
 
 ## Test plan
 

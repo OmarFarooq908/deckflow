@@ -17,6 +17,8 @@ export interface Card {
   back_md: string;
   card_type: string | null;
   tags: string[];
+  concepts?: string[];
+  objective?: string | null;
   hint?: string | null;
   links?: string[];
   queue_reason?: string | null;
@@ -70,6 +72,70 @@ export interface StudyPlanItem {
   score: number;
 }
 
+export interface LibraryNode {
+  id: string;
+  label: string;
+  kind: string;
+  path?: string | null;
+  slug?: string | null;
+  due_count: number;
+  card_count: number;
+  mastery_score?: number | null;
+  children: LibraryNode[];
+}
+
+export interface CollectionSummary {
+  id: number;
+  slug: string;
+  title: string;
+  description?: string | null;
+  due_count: number;
+  card_count: number;
+}
+
+export interface TrackStepSummary {
+  step_index: number;
+  step_type: string;
+  match: string;
+  due_count: number;
+  card_count: number;
+  completed: boolean;
+}
+
+export interface TrackSummary {
+  id: string;
+  title: string;
+  description?: string | null;
+  current_step: number;
+  total_steps: number;
+  steps: TrackStepSummary[];
+  focus_deck_prefix?: string | null;
+  focus_concept_slug?: string | null;
+}
+
+export interface LearningLibrary {
+  collection: CollectionSummary | null;
+  modules: LibraryNode[];
+  topics: LibraryNode[];
+  tracks: TrackSummary[];
+}
+
+export interface ReviewFocusParams {
+  deck?: string;
+  concept?: string;
+  track?: string;
+}
+
+function focusQuery(params?: ReviewFocusParams): string {
+  if (!params) return "";
+  const search = new URLSearchParams();
+  if (params.deck) search.set("deck_prefix", params.deck);
+  if (params.concept) search.set("concept_slug", params.concept);
+  if (params.track) search.set("track_id", params.track);
+  const query = search.toString();
+  return query ? `?${query}` : "";
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -86,12 +152,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
+    let detail = `Request failed (${response.status})`;
     try {
       const parsed = JSON.parse(body) as { detail?: string };
-      throw new Error(parsed.detail || `Request failed: ${response.status}`);
+      if (parsed.detail) {
+        detail =
+          response.status === 404
+            ? "Endpoint not found — restart `deckflow serve` and use http://localhost:5173"
+            : parsed.detail;
+      }
     } catch {
-      throw new Error(body || `Request failed: ${response.status}`);
+      if (body) detail = body;
     }
+    throw new Error(detail);
   }
 
   if (response.status === 204 || !body) {
@@ -105,8 +178,8 @@ export function fetchStats(): Promise<Stats> {
   return request<Stats>("/stats");
 }
 
-export function fetchNextCard(): Promise<Card | null> {
-  return request<Card | null>("/review/next");
+export function fetchNextCard(focus?: ReviewFocusParams): Promise<Card | null> {
+  return request<Card | null>(`/review/next${focusQuery(focus)}`);
 }
 
 export function submitReview(
@@ -145,6 +218,10 @@ export function fetchWeakSpots(): Promise<WeakSpot[]> {
   return request<WeakSpot[]>("/analytics/weak-spots");
 }
 
-export function fetchStudyPlan(): Promise<StudyPlanItem[]> {
-  return request<StudyPlanItem[]>("/study-plan/today");
+export function fetchStudyPlan(focus?: ReviewFocusParams): Promise<StudyPlanItem[]> {
+  return request<StudyPlanItem[]>(`/study-plan/today${focusQuery(focus)}`);
+}
+
+export function fetchLibrary(): Promise<LearningLibrary> {
+  return request<LearningLibrary>("/library");
 }

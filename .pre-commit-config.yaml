@@ -16,6 +16,13 @@ repos:
 
   - repo: local
     hooks:
+      - id: check-git-author
+        name: check git author
+        entry: scripts/check-git-author.sh
+        language: script
+        pass_filenames: false
+        stages: [pre-commit]
+
       - id: mypy
         name: mypy
         entry: mypy deckflow cli api

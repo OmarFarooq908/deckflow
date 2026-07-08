@@ -26,6 +26,15 @@ def test_import_idempotency(repo: Repository) -> None:
     assert repo.count_total_cards() == 3
 
 
+def test_v2_project_import_idempotency(repo: Repository) -> None:
+    project = Path(__file__).parent.parent / "examples" / "python-de-interview"
+    first = import_deck(repo, project)
+    second = import_deck(repo, project)
+    assert first["imported"] == 12
+    assert second["imported"] == 12
+    assert repo.count_total_cards() == 12
+
+
 def test_review_preserves_card_count_on_reimport(repo: Repository) -> None:
     import_deck(repo, FIXTURE)
     card = repo.get_due_cards(limit=1)[0]

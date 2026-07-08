@@ -15,5 +15,6 @@ build/
 htmlcov/
 coverage.xml
 .cursor/
+*.tsbuildinfo
 web/node_modules/
 web/dist/

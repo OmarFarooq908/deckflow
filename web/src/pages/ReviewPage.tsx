@@ -1,49 +1,100 @@
-import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { Card, fetchNextCard, submitReview } from "../api";
-import { MarkdownCard } from "../components/MarkdownCard";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { CheckCircle2, HelpCircle } from "lucide-react";
+import {
+  Card as ApiCard,
+  ReviewFocusParams,
+  fetchNextCard,
+  submitReview,
+} from "@/api";
+import { DeckBreadcrumb } from "@/components/DeckBreadcrumb";
+import { EmptyState } from "@/components/EmptyState";
+import { ErrorAlert } from "@/components/ErrorAlert";
+import { LoadingState } from "@/components/LoadingState";
+import { MarkdownCard } from "@/components/MarkdownCard";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useStatsContext } from "@/hooks/useStatsContext";
+import { cn } from "@/lib/utils";
 
 const RATINGS = [
-  { value: 1, label: "Again", className: "rating-again" },
-  { value: 2, label: "Hard", className: "rating-hard" },
-  { value: 3, label: "Good", className: "rating-good" },
-  { value: 4, label: "Easy", className: "rating-easy" },
+  { value: 1, label: "Again", className: "bg-red-500 hover:bg-red-600" },
+  { value: 2, label: "Hard", className: "bg-amber-500 hover:bg-amber-600" },
+  { value: 3, label: "Good", className: "bg-green-500 hover:bg-green-600" },
+  { value: 4, label: "Easy", className: "bg-cyan-500 hover:bg-cyan-600" },
 ] as const;
 
+function focusLabel(focus: ReviewFocusParams): string | null {
+  if (focus.deck) {
+    const parts = focus.deck.split("::");
+    return parts[parts.length - 1] ?? focus.deck;
+  }
+  if (focus.concept) {
+    const parts = focus.concept.split("::");
+    return parts[parts.length - 1] ?? focus.concept;
+  }
+  if (focus.track) return `track: ${focus.track}`;
+  return null;
+}
+
 export function ReviewPage() {
-  const [card, setCard] = useState<Card | null>(null);
+  const [searchParams] = useSearchParams();
+  const deck = searchParams.get("deck") ?? undefined;
+  const concept = searchParams.get("concept") ?? undefined;
+  const track = searchParams.get("track") ?? undefined;
+  const focus: ReviewFocusParams = { deck, concept, track };
+  const studying = focusLabel(focus);
+  const { refresh: refreshStats } = useStatsContext();
+
+  const [card, setCard] = useState<ApiCard | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [done, setDone] = useState(false);
   const shownAt = useRef<number>(Date.now());
   const revealedAt = useRef<number | null>(null);
 
-  async function loadNext() {
+  const loadNext = useCallback(async () => {
     setLoading(true);
     setError(null);
     setRevealed(false);
     revealedAt.current = null;
+    const focusParams: ReviewFocusParams = { deck, concept, track };
     try {
-      const next = await fetchNextCard();
+      const next = await fetchNextCard(focusParams);
       setCard(next);
       setDone(next === null);
       shownAt.current = Date.now();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load card");
+      setError(err);
     } finally {
       setLoading(false);
     }
-  }
+  }, [deck, concept, track]);
 
   useEffect(() => {
     void loadNext();
-  }, []);
+  }, [loadNext]);
 
-  function handleReveal() {
-    revealedAt.current = Date.now();
-    setRevealed(true);
-  }
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!revealed || !card) return;
+      const rating = Number(event.key);
+      if (rating >= 1 && rating <= 4) {
+        void handleRate(rating);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealed, card]);
 
   async function handleRate(rating: number) {
     if (!card) return;
@@ -57,89 +108,162 @@ export function ReviewPage() {
       : undefined;
     try {
       await submitReview(card.id, rating, { reveal_ms, rating_ms });
+      await refreshStats();
       await loadNext();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save review");
+      setError(err);
     }
   }
 
   if (loading) {
-    return <div className="panel">Loading next card...</div>;
+    return <LoadingState variant="review" />;
+  }
+
+  if (error && !card) {
+    return <ErrorAlert error={error} onRetry={() => void loadNext()} />;
   }
 
   if (done) {
     return (
-      <div className="panel">
-        <h1>All caught up</h1>
-        <p className="muted">No cards are due for review right now.</p>
-        <div className="actions">
-          <Link className="btn" to="/">
-            Back home
-          </Link>
-        </div>
-      </div>
+      <EmptyState
+        icon={<CheckCircle2 className="h-10 w-10" />}
+        title="All caught up"
+        description={
+          studying
+            ? `No cards due in "${studying}" right now.`
+            : "No cards are due for review right now."
+        }
+        actionLabel="Browse library"
+        actionTo="/library"
+      />
     );
   }
 
   if (!card) {
-    return <div className="panel">No card available.</div>;
+    return (
+      <EmptyState
+        title="No card available"
+        description="Import a deck or check back later."
+        actionLabel="Go to Today"
+        actionTo="/"
+      />
+    );
   }
 
   return (
-    <div className="panel">
-      <p className="muted">{card.deck_path}</p>
-      {card.queue_reason && (
-        <p className="queue-reason">Queue: {card.queue_reason}</p>
-      )}
-      {card.tags.length > 0 && (
-        <p className="muted">Tags: {card.tags.join(", ")}</p>
-      )}
-      {card.hint && !revealed && (
-        <p className="hint-box">
-          <strong>Hint:</strong> {card.hint}
-        </p>
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      {studying && (
+        <Alert>
+          <AlertTitle className="flex items-center justify-between gap-2">
+            <span>
+              Studying: <strong>{studying}</strong>
+            </span>
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/review">Clear focus</Link>
+            </Button>
+          </AlertTitle>
+        </Alert>
       )}
 
-      <h2>Front</h2>
-      <MarkdownCard content={card.front_md} />
+      <DeckBreadcrumb deckPath={card.deck_path} />
 
-      {!revealed ? (
-        <div className="actions">
-          <button className="btn" onClick={handleReveal}>
-            Reveal answer
-          </button>
-        </div>
-      ) : (
-        <>
-          <h2>Back</h2>
-          <MarkdownCard content={card.back_md} />
-          {card.links && card.links.length > 0 && (
-            <div className="links-box">
-              <strong>Links:</strong>
-              <ul>
-                {card.links.map((link) => (
-                  <li key={link}>
-                    <code>{link}</code>
-                  </li>
-                ))}
-              </ul>
-            </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {card.concepts?.map((slug) => (
+          <Link
+            key={slug}
+            to={`/review?concept=${encodeURIComponent(slug)}`}
+            className="inline-flex"
+          >
+            <Badge variant="secondary">
+              {slug.split("::").pop() ?? slug}
+            </Badge>
+          </Link>
+        ))}
+        {card.queue_reason && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs">
+                <HelpCircle className="h-3.5 w-3.5" />
+                Why this card?
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">
+              {card.queue_reason}
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+
+      {card.objective && (
+        <Alert className="border-green-500/30 bg-green-500/10">
+          <AlertDescription>
+            <strong>Objective:</strong> {card.objective}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <p className="text-sm font-medium text-muted-foreground">
+            {revealed ? "Answer" : "Question"}
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <MarkdownCard content={revealed ? card.back_md : card.front_md} />
+
+          {card.hint && !revealed && (
+            <Alert>
+              <AlertDescription>
+                <strong>Hint:</strong> {card.hint}
+              </AlertDescription>
+            </Alert>
           )}
-          <div className="actions">
-            {RATINGS.map((rating) => (
-              <button
-                key={rating.value}
-                className={`btn ${rating.className}`}
-                onClick={() => void handleRate(rating.value)}
-              >
-                {rating.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
 
-      {error && <p className="error">{error}</p>}
+          {!revealed ? (
+            <Button className="w-full" size="lg" onClick={() => {
+              revealedAt.current = Date.now();
+              setRevealed(true);
+            }}>
+              Reveal answer
+            </Button>
+          ) : (
+            <>
+              {card.links && card.links.length > 0 && (
+                <div className="text-sm text-muted-foreground">
+                  <strong className="text-foreground">Links:</strong>
+                  <ul className="mt-1 list-disc pl-5">
+                    {card.links.map((link) => (
+                      <li key={link}>
+                        <code>{link}</code>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {RATINGS.map((rating) => (
+                  <Tooltip key={rating.value}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        className={cn("w-full text-white", rating.className)}
+                        onClick={() => void handleRate(rating.value)}
+                      >
+                        {rating.label}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Press {rating.value}</TooltipContent>
+                  </Tooltip>
+                ))}
+              </div>
+              <p className="text-center text-xs text-muted-foreground">
+                Keyboard: press 1–4 to rate
+              </p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {error ? <ErrorAlert error={error} /> : null}
     </div>
   );
 }

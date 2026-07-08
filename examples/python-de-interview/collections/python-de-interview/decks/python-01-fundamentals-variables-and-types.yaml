@@ -1,0 +1,13 @@
+path: Python::01 Fundamentals::Variables & Types
+tags:
+- syntax
+- fundamentals
+config:
+  new_per_day: 10
+  max_reviews_per_day: 150
+  desired_retention: 0.9
+  review_order: deck
+  bury_related: false
+  inherit_tags: false
+description: Core types, mutability, identity (`is` vs `==`), and truthiness. Master
+  this before patterns.

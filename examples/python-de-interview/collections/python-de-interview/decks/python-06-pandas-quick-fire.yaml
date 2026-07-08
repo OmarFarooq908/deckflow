@@ -1,0 +1,11 @@
+path: Python::06 Pandas::Quick-Fire
+tags:
+- pandas
+config:
+  new_per_day: 5
+  max_reviews_per_day: 150
+  desired_retention: 0.9
+  review_order: deck
+  bury_related: false
+  inherit_tags: false
+description: High-frequency pandas interview questions. Review after fundamentals.

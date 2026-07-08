@@ -1,0 +1,45 @@
+deckflow: 2
+id: python-de-interview
+title: Python Data Engineering Interview
+tags:
+- python
+- interview
+- data-engineering
+config:
+  new_per_day: 20
+  max_reviews_per_day: 150
+  desired_retention: 0.9
+  review_order: deck
+  bury_related: false
+description: 'Comprehensive spaced-repetition deck for Python fundamentals, interview
+  patterns,
+
+  pandas quick-fire, and LeetCode ↔ data-engineering mappings.
+
+
+  Organized for daily review: fundamentals first, patterns second, domain mappings
+  third.
+
+  '
+author: dev
+version: 1.0.0
+created: 2026-07-08
+updated: 2026-07-08
+sources:
+- label: LeetCode practice repo
+  path: ../../LeetCode
+- label: DE study notes
+  path: ./notes
+tracks:
+- id: fundamentals-first
+  title: Fundamentals First
+  description: Start here before patterns and domain mappings
+  steps:
+  - type: deck
+    match: Python::01 Fundamentals::*
+  - type: deck
+    match: Python::07 Interview Patterns::*
+  - type: deck
+    match: Python::06 Pandas::*
+  - type: concept
+    slug: pattern::heap

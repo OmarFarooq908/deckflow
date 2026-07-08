@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from deckflow.db.repository import Repository
-from deckflow.models.domain import CardRow, QueueCard
+from deckflow.models.domain import CardRow, QueueCard, ReviewFocus
 
 PRIORITY_WEIGHTS = {"high": 1.0, "normal": 0.5, "low": 0.2}
 
@@ -12,14 +12,23 @@ def build_daily_queue(
     repo: Repository,
     limit: int = 20,
     now: datetime | None = None,
+    focus: ReviewFocus | None = None,
 ) -> list[QueueCard]:
     now = now or datetime.now(UTC)
     config = repo.get_collection_config()
     new_per_day = int(config.get("new_per_day", 20))
     max_reviews = int(config.get("max_reviews_per_day", 150))
     limit = min(limit, max_reviews)
+    review_order = str(config.get("review_order", "score"))
 
-    candidates = repo.get_due_candidates(now=now)
+    deck_prefix = focus.deck_prefix if focus else None
+    concept_slug = focus.concept_slug if focus else None
+
+    candidates = repo.get_due_candidates_filtered(
+        now=now,
+        deck_prefix=deck_prefix,
+        concept_slug=concept_slug,
+    )
     new_today = repo.count_new_cards_today(now)
     new_budget_left = max(0, new_per_day - new_today)
 
@@ -45,9 +54,16 @@ def build_daily_queue(
             score += 1.0
 
         reason = _build_reason(due_urgency, weakness, priority, is_new, card, repo)
+        if focus and (focus.deck_prefix or focus.concept_slug):
+            focus_label = focus.deck_prefix or focus.concept_slug or focus.track_id
+            reason = f"focused: {focus_label}; {reason}"
         scored.append(QueueCard(card=card, score=score, reason=reason))
 
-    scored.sort(key=lambda item: item.score, reverse=True)
+    if review_order == "deck":
+        scored.sort(key=lambda item: (item.card.deck_path, item.card.card_index, -item.score))
+    else:
+        scored.sort(key=lambda item: item.score, reverse=True)
+
     result = scored[:limit]
 
     for item in result:
@@ -55,6 +71,12 @@ def build_daily_queue(
             recent_concepts.append(slug)
 
     return result
+
+
+def resolve_track_focus(repo: Repository, track_id: str) -> ReviewFocus | None:
+    from deckflow.service.library_service import get_track_focus
+
+    return get_track_focus(repo, track_id)
 
 
 def _due_urgency(due: datetime, now: datetime) -> float:

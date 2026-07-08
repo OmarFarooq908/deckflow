@@ -13,7 +13,18 @@ import {
   fetchStats,
   fetchStudyPlan,
   fetchWeakSpots,
-} from "../api";
+} from "@/api";
+import { DueBadge } from "@/components/DueBadge";
+import { ErrorAlert } from "@/components/ErrorAlert";
+import { LoadingState } from "@/components/LoadingState";
+import { PageHeader } from "@/components/PageHeader";
+import { StatCard } from "@/components/StatCard";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { reviewUrl } from "@/lib/format";
 
 export function StatsPage() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -22,7 +33,7 @@ export function StatsPage() {
   const [weakSpots, setWeakSpots] = useState<WeakSpot[]>([]);
   const [plan, setPlan] = useState<StudyPlanItem[]>([]);
   const [decks, setDecks] = useState<Deck[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     Promise.all([
@@ -41,117 +52,135 @@ export function StatsPage() {
         setPlan(planData);
         setDecks(deckData);
       })
-      .catch((err: Error) => setError(err.message));
+      .catch((err: Error) => setError(err));
   }, []);
 
   if (error) {
-    return <div className="panel error">{error}</div>;
+    return <ErrorAlert error={error} title="Could not load insights" />;
   }
 
   if (!stats || !overview) {
-    return <div className="panel">Loading analytics...</div>;
+    return <LoadingState />;
   }
 
   return (
-    <div className="panel">
-      <h1>Learning Analytics</h1>
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <PageHeader
+        title="Insights"
+        subtitle="Track retention, mastery, and what to study next"
+        action={
+          <Button asChild>
+            <Link to="/review">Start review</Link>
+          </Button>
+        }
+      />
 
-      <h2>Overview</h2>
-      <div className="stat-grid">
-        <div className="stat-card">
-          <span className="muted">Retention (7d)</span>
-          <strong>{overview.retention_7d}%</strong>
-        </div>
-        <div className="stat-card">
-          <span className="muted">Retention (30d)</span>
-          <strong>{overview.retention_30d}%</strong>
-        </div>
-        <div className="stat-card">
-          <span className="muted">Cards/day (7d)</span>
-          <strong>{overview.cards_per_day_7d}</strong>
-        </div>
-        <div className="stat-card">
-          <span className="muted">Avg mastery</span>
-          <strong>{overview.avg_mastery}%</strong>
-        </div>
-        <div className="stat-card">
-          <span className="muted">Due today</span>
-          <strong>{stats.due_today}</strong>
-        </div>
-        <div className="stat-card">
-          <span className="muted">Streak</span>
-          <strong>{overview.streak_days} days</strong>
-        </div>
-      </div>
+      <Tabs defaultValue="overview">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="plan">Plan</TabsTrigger>
+          <TabsTrigger value="mastery">Mastery</TabsTrigger>
+          <TabsTrigger value="decks">Decks</TabsTrigger>
+        </TabsList>
 
-      <h2>Today's plan</h2>
-      {plan.length === 0 ? (
-        <p className="muted">No cards queued for today.</p>
-      ) : (
-        <ul className="plan-list">
-          {plan.slice(0, 8).map((item) => (
-            <li key={item.card_id}>
-              <strong>{item.front_preview}</strong>
-              <span className="muted"> — {item.reason}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <StatCard label="Retention (7d)" value={`${overview.retention_7d}%`} />
+            <StatCard label="Retention (30d)" value={`${overview.retention_30d}%`} />
+            <StatCard label="Cards/day (7d)" value={overview.cards_per_day_7d} />
+            <StatCard label="Avg mastery" value={`${overview.avg_mastery}%`} />
+            <StatCard label="Due today" value={stats.due_today} />
+            <StatCard label="Streak" value={`${overview.streak_days}d`} />
+          </div>
+        </TabsContent>
 
-      <h2>Weak spots</h2>
-      {weakSpots.length === 0 ? (
-        <p className="muted">No weak spots detected yet. Keep reviewing.</p>
-      ) : (
-        <ul className="weak-list">
-          {weakSpots.map((spot) => (
-            <li key={spot.concept_slug}>{spot.message}</li>
-          ))}
-        </ul>
-      )}
+        <TabsContent value="plan" className="space-y-3">
+          {plan.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No cards queued for today.
+            </p>
+          ) : (
+            plan.map((item) => (
+              <Card key={item.card_id} className="transition-colors hover:bg-accent/30">
+                <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-medium">{item.front_preview}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {item.deck_path.split("::").pop()} · {item.reason}
+                    </p>
+                  </div>
+                  <Button asChild variant="secondary" size="sm">
+                    <Link to={reviewUrl(item.deck_path)}>Review</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </TabsContent>
 
-      <h2>Domain mastery</h2>
-      {concepts.length === 0 ? (
-        <p className="muted">Import a deck and review cards to build mastery data.</p>
-      ) : (
-        <div className="mastery-list">
-          {concepts.slice(0, 12).map((concept) => (
-            <div key={concept.concept_id} className="mastery-row">
-              <div className="mastery-label">
-                <span>{concept.slug}</span>
-                <span className="muted">{concept.mastery_score.toFixed(0)}%</span>
-              </div>
-              <div className="mastery-bar">
-                <div
-                  className="mastery-fill"
-                  style={{ width: `${concept.mastery_score}%` }}
-                />
-              </div>
+        <TabsContent value="mastery" className="space-y-4">
+          {weakSpots.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">Weak spots</h3>
+              {weakSpots.map((spot) => (
+                <Alert key={spot.concept_slug} variant="destructive">
+                  <AlertTitle>{spot.concept_label}</AlertTitle>
+                  <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <span>{spot.message}</span>
+                    <Button asChild variant="outline" size="sm">
+                      <Link to={reviewUrl(undefined, spot.concept_slug)}>
+                        Review topic
+                      </Link>
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      <h2>Decks</h2>
-      {decks.length === 0 ? (
-        <p className="muted">No decks imported yet.</p>
-      ) : (
-        <ul>
-          {decks.map((deck) => (
-            <li key={deck.id}>
-              {deck.path} — {deck.due_count} due / {deck.card_count} total
-            </li>
-          ))}
-        </ul>
-      )}
+          {concepts.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Review cards to build mastery data.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {concepts.slice(0, 16).map((concept) => (
+                <div key={concept.concept_id} className="space-y-1.5">
+                  <div className="flex justify-between text-sm">
+                    <span>{concept.label || concept.slug}</span>
+                    <span className="text-muted-foreground">
+                      {concept.mastery_score.toFixed(0)}%
+                    </span>
+                  </div>
+                  <Progress value={concept.mastery_score} className="h-2" />
+                </div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
 
-      <div className="actions">
-        <Link className="btn" to="/review">
-          Start review
-        </Link>
-        <Link className="btn secondary" to="/">
-          Back home
-        </Link>
-      </div>
+        <TabsContent value="decks" className="space-y-2">
+          {decks.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No decks imported yet.
+            </p>
+          ) : (
+            decks.map((deck) => (
+              <Card key={deck.id}>
+                <CardContent className="flex items-center justify-between gap-3 p-4">
+                  <Button asChild variant="link" className="h-auto p-0 text-left">
+                    <Link to="/library">{deck.path}</Link>
+                  </Button>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <DueBadge count={deck.due_count} />
+                    <span>{deck.card_count} total</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

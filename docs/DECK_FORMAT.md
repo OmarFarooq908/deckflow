@@ -1,8 +1,10 @@
 # Deckflow Markdown Format (v1)
 
-Deckflow decks are plain Markdown files designed for **git-native workflows**: human-readable, diff-friendly, and structured enough for reliable import, re-import, and linking to code.
+> **Recommended:** New decks should use the [v2 Deck Project format](DECK_PROJECT.md) (YAML manifests + one card per file). v1 monolithic markdown remains fully supported.
 
-This document is the canonical spec. The reference implementation lives in [`examples/advanced_sample_deck.md`](../examples/advanced_sample_deck.md).
+Deckflow v1 decks are plain Markdown files designed for **git-native workflows**: human-readable, diff-friendly, and structured enough for reliable import, re-import, and linking to code.
+
+This document is the canonical v1 spec. The reference implementation lives in [`examples/legacy/advanced_sample_deck.md`](../examples/legacy/advanced_sample_deck.md).
 
 ---
 

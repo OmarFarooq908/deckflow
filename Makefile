@@ -1,4 +1,4 @@
-.PHONY: lint format test check install-dev
+.PHONY: lint format test validate check install-dev
 
 lint:
 	ruff check .
@@ -10,10 +10,13 @@ format:
 	ruff format .
 	ruff check --fix .
 
+validate:
+	deckflow validate examples/python-de-interview
+
 test:
 	pytest --cov --cov-report=term-missing --cov-fail-under=75
 
-check: lint test
+check: lint validate test
 	cd web && npm run typecheck && npm run build
 
 install-dev:

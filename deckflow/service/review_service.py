@@ -4,13 +4,24 @@ import json
 from datetime import UTC, datetime
 
 from deckflow.db.repository import Repository
-from deckflow.models.domain import CardRow, QueueCard, ReviewResult, ReviewTelemetry
+from deckflow.models.domain import (
+    CardRow,
+    QueueCard,
+    ReviewFocus,
+    ReviewResult,
+    ReviewTelemetry,
+)
 from deckflow.scheduler.fsrs import card_from_json, card_to_json, fsrs_snapshot, review_card
-from deckflow.service.queue_service import build_daily_queue
+from deckflow.service.queue_service import build_daily_queue, resolve_track_focus
 
 
-def get_next_card(repo: Repository) -> tuple[CardRow | None, str | None]:
-    queue = build_daily_queue(repo, limit=1)
+def get_next_card(
+    repo: Repository,
+    focus: ReviewFocus | None = None,
+) -> tuple[CardRow | None, str | None]:
+    if focus and focus.track_id and not focus.deck_prefix and not focus.concept_slug:
+        focus = resolve_track_focus(repo, focus.track_id) or focus
+    queue = build_daily_queue(repo, limit=1, focus=focus)
     if not queue:
         return None, None
     return queue[0].card, queue[0].reason
@@ -80,5 +91,11 @@ def submit_review(
     return ReviewResult(card=card, due=updated.due, reps=reps)
 
 
-def get_queue(repo: Repository, limit: int = 20) -> list[QueueCard]:
-    return build_daily_queue(repo, limit=limit)
+def get_queue(
+    repo: Repository,
+    limit: int = 20,
+    focus: ReviewFocus | None = None,
+) -> list[QueueCard]:
+    if focus and focus.track_id and not focus.deck_prefix and not focus.concept_slug:
+        focus = resolve_track_focus(repo, focus.track_id) or focus
+    return build_daily_queue(repo, limit=limit, focus=focus)

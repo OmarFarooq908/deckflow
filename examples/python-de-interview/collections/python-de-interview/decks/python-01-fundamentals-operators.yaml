@@ -1,0 +1,11 @@
+path: Python::01 Fundamentals::Operators
+tags:
+- syntax
+config:
+  new_per_day: 8
+  max_reviews_per_day: 150
+  desired_retention: 0.9
+  review_order: deck
+  bury_related: false
+  inherit_tags: false
+description: Arithmetic, membership, unpacking, and Pythonic idioms.

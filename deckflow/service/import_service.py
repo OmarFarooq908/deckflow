@@ -3,8 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from deckflow.compiler.compile import compile_path
 from deckflow.db.repository import Repository
-from deckflow.parser.markdown import parse_markdown_deck_text
+from deckflow.schemas.compiled import CompiledCollection
 
 
 def _json_safe(value: Any) -> Any:
@@ -17,18 +18,14 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
-def import_deck(repo: Repository, deck_path: Path) -> dict[str, Any]:
-    deck_path = deck_path.expanduser().resolve()
-    if not deck_path.exists():
-        raise FileNotFoundError(f"Deck file not found: {deck_path}")
+def import_compiled(repo: Repository, compiled: CompiledCollection) -> dict[str, Any]:
+    if not compiled.cards:
+        raise ValueError("No cards in compiled collection")
 
-    parsed = parse_markdown_deck_text(deck_path.read_text(encoding="utf-8"))
-    if not parsed.cards:
-        raise ValueError(f"No cards found in {deck_path}")
+    parsed = compiled.to_parsed_deck()
+    source_file = str(compiled.source_root) if compiled.source_root else "compiled"
 
-    source_file = str(deck_path)
     collection_id: int | None = None
-
     if parsed.collection:
         collection_id = repo.upsert_collection(
             slug=parsed.collection.collection_id,
@@ -92,6 +89,38 @@ def import_deck(repo: Repository, deck_path: Path) -> dict[str, Any]:
         "decks": len(deck_ids),
         "suspended": suspended,
         "path": source_file,
-        "format": "v1" if parsed.collection else "legacy",
+        "format": compiled.format,
         "collection_id": parsed.collection.collection_id if parsed.collection else None,
     }
+
+
+def import_deck(repo: Repository, deck_path: Path) -> dict[str, Any]:
+    deck_path = deck_path.expanduser().resolve()
+    if not deck_path.exists():
+        raise FileNotFoundError(f"Deck path not found: {deck_path}")
+
+    compiled_list = compile_path(deck_path)
+    if not compiled_list:
+        raise ValueError(f"No collections compiled from {deck_path}")
+
+    totals: dict[str, Any] = {
+        "imported": 0,
+        "decks": 0,
+        "suspended": 0,
+        "path": str(deck_path),
+        "format": compiled_list[0].format,
+        "collection_id": None,
+    }
+    all_deck_paths: set[str] = set()
+
+    for compiled in compiled_list:
+        result = import_compiled(repo, compiled)
+        totals["imported"] += result["imported"]
+        totals["suspended"] += result["suspended"]
+        totals["format"] = result["format"]
+        if result.get("collection_id"):
+            totals["collection_id"] = result["collection_id"]
+        all_deck_paths.update(c.deck_path for c in compiled.cards)
+
+    totals["decks"] = len(all_deck_paths)
+    return totals

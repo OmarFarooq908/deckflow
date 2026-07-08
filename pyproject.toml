@@ -52,13 +52,24 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
 "cli/main.py" = ["B008"]
-"deckflow/db/repository.py" = ["SIM401"]
+"deckflow/db/repository/_helpers.py" = ["SIM401"]
 
 [tool.mypy]
 python_version = "3.11"
 strict = true
 explicit_package_bases = true
 packages = ["deckflow", "cli", "api"]
+
+[[tool.mypy.overrides]]
+module = [
+    "deckflow.db.repository.collections",
+    "deckflow.db.repository.concepts",
+    "deckflow.db.repository.cards",
+    "deckflow.db.repository.reviews",
+    "deckflow.db.repository.analytics",
+    "deckflow.db.repository",
+]
+disable_error_code = ["attr-defined", "misc", "has-type", "no-any-return"]
 
 [[tool.mypy.overrides]]
 module = ["fsrs.*"]

@@ -95,5 +95,4 @@ CREATE INDEX IF NOT EXISTS idx_scheduling_due ON scheduling(due);
 CREATE INDEX IF NOT EXISTS idx_reviews_reviewed_at ON reviews(reviewed_at);
 CREATE INDEX IF NOT EXISTS idx_reviews_card_id ON reviews(card_id);
 CREATE INDEX IF NOT EXISTS idx_card_concepts_concept ON card_concepts(concept_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_deck_uid ON cards(deck_id, card_uid);
 """

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from deckflow.parser.markdown import parse_markdown_deck, parse_markdown_deck_text
 
-ADVANCED = Path(__file__).parent.parent / "examples" / "advanced_sample_deck.md"
+ADVANCED = Path(__file__).parent.parent / "examples" / "legacy" / "advanced_sample_deck.md"
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_deck.md"
 
 

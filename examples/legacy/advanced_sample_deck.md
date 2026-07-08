@@ -29,7 +29,7 @@ sources:
 
 > **How to use this deck**
 >
-> 1. Import into Deckflow: `deckflow import examples/advanced_sample_deck.md`
+> 1. Import into Deckflow: `deckflow import examples/legacy/advanced_sample_deck.md`
 > 2. Review 20 new cards/day (collection default) — adjust per subdeck via `**Deck config:**`
 > 3. Use `**Links:**` to jump to LeetCode problems after a Good/Easy rating
 > 4. Suspended cards (`status: suspended`) stay in git but skip the queue

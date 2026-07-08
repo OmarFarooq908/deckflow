@@ -1,0 +1,12 @@
+path: Python::07 Interview Patterns::Top-K
+tags:
+- pattern
+- heap
+config:
+  new_per_day: 5
+  max_reviews_per_day: 150
+  desired_retention: 0.9
+  review_order: deck
+  bury_related: false
+  inherit_tags: false
+description: Heap / quickselect patterns mapped to real problems.

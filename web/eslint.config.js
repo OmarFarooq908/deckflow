@@ -25,4 +25,10 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    files: ["src/components/ui/**", "src/hooks/**"],
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
 );

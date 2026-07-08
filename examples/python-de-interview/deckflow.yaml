@@ -1,0 +1,7 @@
+deckflow: 2
+name: python-de-interview
+version: 1.0.0
+collections:
+- collections/python-de-interview
+defaults:
+  config: {}

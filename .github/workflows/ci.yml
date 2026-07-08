@@ -35,6 +35,9 @@ jobs:
       - name: Mypy
         run: mypy deckflow cli api
 
+      - name: Validate v2 example project
+        run: deckflow validate examples/python-de-interview
+
       - name: Pytest with coverage
         run: pytest --cov --cov-report=xml --cov-fail-under=75
 

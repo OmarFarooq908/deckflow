@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from api.main import app
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_deck.md"
+V2_PROJECT = Path(__file__).parent.parent / "examples" / "python-de-interview"
 PYTHON_DECK = Path(
     "/Users/dev/Documents/Personal/LeetCode/LeetCode/arb-data-engineer/anki/PYTHON_DECK.md"
 )
@@ -38,6 +39,42 @@ def test_api_import_review_flow(client: TestClient) -> None:
     decks = client.get("/decks")
     assert decks.status_code == 200
     assert len(decks.json()) == 1
+
+
+def test_api_library_and_focused_review(client: TestClient) -> None:
+    response = client.post("/import", json={"path": str(V2_PROJECT)})
+    assert response.status_code == 200
+
+    library = client.get("/library")
+    assert library.status_code == 200
+    payload = library.json()
+    assert payload["collection"]["slug"] == "python-de-interview"
+    assert len(payload["modules"]) >= 1
+    assert len(payload["tracks"]) >= 1
+
+    modules_only = client.get("/library/modules")
+    assert modules_only.status_code == 200
+    assert len(modules_only.json()) >= 1
+
+    topics = client.get("/library/topics")
+    assert topics.status_code == 200
+
+    focused = client.get(
+        "/review/next",
+        params={"deck_prefix": "Python::01 Fundamentals"},
+    )
+    assert focused.status_code == 200
+    card = focused.json()
+    if card is not None:
+        assert card["deck_path"].startswith("Python::01 Fundamentals")
+        assert "concepts" in card
+
+    plan = client.get(
+        "/study-plan/today",
+        params={"deck_prefix": "Python::01 Fundamentals", "limit": 5},
+    )
+    assert plan.status_code == 200
+    assert isinstance(plan.json(), list)
 
 
 @pytest.mark.skipif(not PYTHON_DECK.exists(), reason="PYTHON_DECK.md not available")

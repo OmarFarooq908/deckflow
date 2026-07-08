@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- v2 Deck Project format: `deckflow.yaml` manifest, modular YAML + markdown card files
+- Compile pipeline: `deckflow validate`, `deckflow compile`, `deckflow migrate`
+- Pydantic schemas and validation rules via optional `schema.yaml`
+- `deckflow init-project` scaffolder
+- Reference v2 project at `examples/python-de-interview/`
+- Split `deckflow/db/repository/` into domain mixin modules
+- Learning library CLI and web UI (deck module tree, study tracks, focused review)
 - Data-centric learning platform: collections, concepts, concept mastery
 - Rich review telemetry (reveal_ms, rating_ms, retrievability, FSRS snapshots)
 - Smart daily queue with explainable prioritization

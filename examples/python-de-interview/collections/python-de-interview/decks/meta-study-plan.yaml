@@ -1,0 +1,11 @@
+path: Meta::Study Plan
+tags:
+- meta
+config:
+  new_per_day: 0
+  max_reviews_per_day: 150
+  desired_retention: 0.9
+  review_order: deck
+  bury_related: false
+  inherit_tags: false
+description: Non-review reference cards — scheduling hints and milestones.

@@ -6,6 +6,7 @@ from deckflow.db.repository import Repository
 from deckflow.models.domain import (
     AnalyticsOverview,
     ConceptMastery,
+    ReviewFocus,
     StudyPlanItem,
     WeakSpot,
 )
@@ -53,10 +54,17 @@ def get_weak_spots(repo: Repository, limit: int = 10) -> list[WeakSpot]:
     return spots[:limit]
 
 
-def get_study_plan(repo: Repository, limit: int = 20) -> list[StudyPlanItem]:
-    from deckflow.service.queue_service import build_daily_queue
+def get_study_plan(
+    repo: Repository,
+    limit: int = 20,
+    focus: ReviewFocus | None = None,
+) -> list[StudyPlanItem]:
+    from deckflow.service.queue_service import build_daily_queue, resolve_track_focus
 
-    queue = build_daily_queue(repo, limit=limit)
+    if focus and focus.track_id and not focus.deck_prefix and not focus.concept_slug:
+        focus = resolve_track_focus(repo, focus.track_id) or focus
+
+    queue = build_daily_queue(repo, limit=limit, focus=focus)
     items: list[StudyPlanItem] = []
     for entry in queue:
         preview = entry.card.front_md.replace("\n", " ")[:80]

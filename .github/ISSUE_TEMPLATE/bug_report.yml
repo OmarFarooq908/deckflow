@@ -28,7 +28,7 @@ body:
     attributes:
       label: Steps to reproduce
       placeholder: |
-        1. Run `deckflow import examples/advanced_sample_deck.md`
+        1. Run `deckflow import examples/python-de-interview`
         2. ...
     validations:
       required: true

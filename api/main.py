@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from deckflow.config import get_db_path
 from deckflow.db.repository import Repository
-from deckflow.models.domain import ReviewTelemetry
+from deckflow.models.domain import ReviewFocus, ReviewTelemetry
 from deckflow.service.analytics_service import (
     get_card_analytics,
     get_concepts,
@@ -18,6 +18,11 @@ from deckflow.service.analytics_service import (
     get_weak_spots,
 )
 from deckflow.service.import_service import import_deck
+from deckflow.service.library_service import (
+    get_learning_library,
+    get_module_tree,
+    get_topic_tree,
+)
 from deckflow.service.review_service import get_next_card, submit_review
 from deckflow.service.stats_service import get_decks, get_last_import_path, get_stats
 
@@ -58,6 +63,8 @@ class CardResponse(BaseModel):
     back_md: str
     card_type: str | None = None
     tags: list[str] = Field(default_factory=list)
+    concepts: list[str] = Field(default_factory=list)
+    objective: str | None = None
     hint: str | None = None
     links: list[str] = Field(default_factory=list)
     queue_reason: str | None = None
@@ -135,6 +142,98 @@ class StudyPlanItemResponse(BaseModel):
     score: float
 
 
+class LibraryNodeResponse(BaseModel):
+    id: str
+    label: str
+    kind: str
+    path: str | None = None
+    slug: str | None = None
+    due_count: int = 0
+    card_count: int = 0
+    mastery_score: float | None = None
+    children: list[LibraryNodeResponse] = Field(default_factory=list)
+
+
+class CollectionSummaryResponse(BaseModel):
+    id: int
+    slug: str
+    title: str
+    description: str | None = None
+    due_count: int
+    card_count: int
+
+
+class TrackStepResponse(BaseModel):
+    step_index: int
+    step_type: str
+    match: str
+    due_count: int
+    card_count: int
+    completed: bool
+
+
+class TrackSummaryResponse(BaseModel):
+    id: str
+    title: str
+    description: str | None = None
+    current_step: int
+    total_steps: int
+    steps: list[TrackStepResponse]
+    focus_deck_prefix: str | None = None
+    focus_concept_slug: str | None = None
+
+
+class LearningLibraryResponse(BaseModel):
+    collection: CollectionSummaryResponse | None = None
+    modules: list[LibraryNodeResponse]
+    topics: list[LibraryNodeResponse]
+    tracks: list[TrackSummaryResponse]
+
+
+def _build_focus(
+    deck_prefix: str | None = None,
+    concept_slug: str | None = None,
+    track_id: str | None = None,
+) -> ReviewFocus | None:
+    if not deck_prefix and not concept_slug and not track_id:
+        return None
+    return ReviewFocus(
+        deck_prefix=deck_prefix,
+        concept_slug=concept_slug,
+        track_id=track_id,
+    )
+
+
+def _library_node(node: Any) -> LibraryNodeResponse:
+    return LibraryNodeResponse(
+        id=node.id,
+        label=node.label,
+        kind=node.kind,
+        path=node.path,
+        slug=node.slug,
+        due_count=node.due_count,
+        card_count=node.card_count,
+        mastery_score=node.mastery_score,
+        children=[_library_node(child) for child in node.children],
+    )
+
+
+def _card_response(repo: Repository, card: Any, reason: str | None) -> CardResponse:
+    return CardResponse(
+        id=card.id,
+        deck_path=card.deck_path,
+        front_md=card.front_md,
+        back_md=card.back_md,
+        card_type=card.card_type,
+        tags=card.tags,
+        concepts=repo.get_card_concept_slugs(card.id),
+        objective=repo.get_card_objective(card.id),
+        hint=card.hint,
+        links=card.links,
+        queue_reason=reason,
+    )
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -151,22 +250,17 @@ def import_deck_endpoint(body: ImportRequest) -> ImportResponse:
 
 
 @app.get("/review/next", response_model=CardResponse | None)
-def review_next() -> CardResponse | None:
+def review_next(
+    deck_prefix: str | None = None,
+    concept_slug: str | None = None,
+    track_id: str | None = None,
+) -> CardResponse | None:
     repo = get_repo()
-    card, reason = get_next_card(repo)
+    focus = _build_focus(deck_prefix, concept_slug, track_id)
+    card, reason = get_next_card(repo, focus=focus)
     if card is None:
         return None
-    return CardResponse(
-        id=card.id,
-        deck_path=card.deck_path,
-        front_md=card.front_md,
-        back_md=card.back_md,
-        card_type=card.card_type,
-        tags=card.tags,
-        hint=card.hint,
-        links=card.links,
-        queue_reason=reason,
-    )
+    return _card_response(repo, card, reason)
 
 
 @app.post("/review/{card_id}", response_model=ReviewSubmitResponse)
@@ -284,8 +378,14 @@ def analytics_card(card_id: int) -> dict[str, Any]:
 
 
 @app.get("/study-plan/today", response_model=list[StudyPlanItemResponse])
-def study_plan_today(limit: int = 20) -> list[StudyPlanItemResponse]:
+def study_plan_today(
+    limit: int = 20,
+    deck_prefix: str | None = None,
+    concept_slug: str | None = None,
+    track_id: str | None = None,
+) -> list[StudyPlanItemResponse]:
     repo = get_repo()
+    focus = _build_focus(deck_prefix, concept_slug, track_id)
     return [
         StudyPlanItemResponse(
             card_id=item.card_id,
@@ -295,5 +395,61 @@ def study_plan_today(limit: int = 20) -> list[StudyPlanItemResponse]:
             reason=item.reason,
             score=item.score,
         )
-        for item in get_study_plan(repo, limit=limit)
+        for item in get_study_plan(repo, limit=limit, focus=focus)
     ]
+
+
+@app.get("/library", response_model=LearningLibraryResponse)
+def library() -> LearningLibraryResponse:
+    repo = get_repo()
+    lib = get_learning_library(repo)
+    collection = None
+    if lib.collection:
+        collection = CollectionSummaryResponse(
+            id=lib.collection.id,
+            slug=lib.collection.slug,
+            title=lib.collection.title,
+            description=lib.collection.description,
+            due_count=lib.collection.due_count,
+            card_count=lib.collection.card_count,
+        )
+    return LearningLibraryResponse(
+        collection=collection,
+        modules=[_library_node(node) for node in lib.modules],
+        topics=[_library_node(node) for node in lib.topics],
+        tracks=[
+            TrackSummaryResponse(
+                id=track.id,
+                title=track.title,
+                description=track.description,
+                current_step=track.current_step,
+                total_steps=track.total_steps,
+                steps=[
+                    TrackStepResponse(
+                        step_index=step.step_index,
+                        step_type=step.step_type,
+                        match=step.match,
+                        due_count=step.due_count,
+                        card_count=step.card_count,
+                        completed=step.completed,
+                    )
+                    for step in track.steps
+                ],
+                focus_deck_prefix=track.focus_deck_prefix,
+                focus_concept_slug=track.focus_concept_slug,
+            )
+            for track in lib.tracks
+        ],
+    )
+
+
+@app.get("/library/modules", response_model=list[LibraryNodeResponse])
+def library_modules() -> list[LibraryNodeResponse]:
+    repo = get_repo()
+    return [_library_node(node) for node in get_module_tree(repo)]
+
+
+@app.get("/library/topics", response_model=list[LibraryNodeResponse])
+def library_topics() -> list[LibraryNodeResponse]:
+    repo = get_repo()
+    return [_library_node(node) for node in get_topic_tree(repo)]

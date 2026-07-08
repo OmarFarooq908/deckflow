@@ -27,15 +27,16 @@ cd web && npm ci && cd ..
 Run before opening a PR:
 
 ```bash
-make check    # lint + test + web build
+make check    # lint + validate + test + web build
 ```
 
 Individual targets:
 
 ```bash
-make lint     # ruff, mypy, eslint
-make test     # pytest with coverage (75% minimum)
-make format   # auto-format Python with ruff
+make lint      # ruff, mypy, eslint
+make validate  # deckflow validate on example v2 project
+make test      # pytest with coverage (75% minimum)
+make format    # auto-format Python with ruff
 ```
 
 ### Pre-commit hooks (recommended)
@@ -65,16 +66,24 @@ Hooks run ruff, mypy, and basic file hygiene on each commit.
 
 ## Deck format changes
 
-If you modify the markdown deck format:
+**v2 (recommended):** YAML project layout with markdown card files.
+
+1. Update [`deckflow/schemas/specs.py`](deckflow/schemas/specs.py) for new card fields
+2. Update [`docs/DECK_PROJECT.md`](docs/DECK_PROJECT.md)
+3. Update [`examples/python-de-interview/`](examples/python-de-interview/) reference project
+4. Add tests in `tests/test_compiler.py`
+
+**v1 (legacy supported):** monolithic markdown.
 
 1. Update [`docs/DECK_FORMAT.md`](docs/DECK_FORMAT.md)
-2. Update [`examples/advanced_sample_deck.md`](examples/advanced_sample_deck.md)
+2. Update [`examples/legacy/advanced_sample_deck.md`](examples/legacy/advanced_sample_deck.md)
 3. Add parser tests in `tests/`
 
 ## Architecture guidelines
 
 - Business logic lives in `deckflow/service/` — keep `cli/` and `api/` thin
-- SQL stays in `deckflow/db/repository.py`
+- SQL stays in `deckflow/db/repository/` (split by domain module)
+- Compile pipeline: `deckflow/compiler/` + `deckflow/extract/` + `deckflow/schemas/`
 - Schema changes need a migration in `_migrate()` plus a test
 - See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full picture
 
