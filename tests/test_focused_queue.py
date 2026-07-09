@@ -125,3 +125,45 @@ def test_concept_fatigue_applies_during_scoring(repo: Repository) -> None:
         queue_service._concept_fatigue = original
 
     assert any(size > 0 for size in sizes_at_call)
+
+
+def _set_max_reviews(repo: Repository, max_reviews: int) -> None:
+    repo.upsert_collection(
+        slug="test-schedule",
+        title="Test Schedule",
+        source_file="test",
+        config={"max_reviews_per_day": max_reviews, "new_per_day": 20},
+    )
+
+
+def test_max_reviews_per_day_limits_queue(repo: Repository) -> None:
+    from deckflow.service.review_service import submit_review
+
+    import_deck(repo, FIXTURE)
+    _set_max_reviews(repo, max_reviews=2)
+
+    queue = build_daily_queue(repo, limit=10)
+    assert len(queue) == 2
+
+    card = queue[0].card
+    submit_review(repo, card.id, rating=3)
+
+    queue = build_daily_queue(repo, limit=10)
+    assert len(queue) == 1
+
+
+def test_max_reviews_per_day_exhausted_returns_empty(repo: Repository) -> None:
+    from deckflow.service.review_service import submit_review
+
+    import_deck(repo, FIXTURE)
+    _set_max_reviews(repo, max_reviews=2)
+
+    for _ in range(2):
+        card, _ = get_next_card(repo)
+        assert card is not None
+        submit_review(repo, card.id, rating=3)
+
+    assert build_daily_queue(repo, limit=10) == []
+    card, reason = get_next_card(repo)
+    assert card is None
+    assert reason is None

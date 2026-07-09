@@ -18,7 +18,11 @@ def build_daily_queue(
     config = repo.get_collection_config()
     new_per_day = int(config.get("new_per_day", 20))
     max_reviews = int(config.get("max_reviews_per_day", 150))
-    limit = min(limit, max_reviews)
+    reviewed_today = repo.count_reviewed_today(now)
+    reviews_left = max(0, max_reviews - reviewed_today)
+    if reviews_left == 0:
+        return []
+    limit = min(limit, reviews_left)
     review_order = str(config.get("review_order", "score"))
 
     deck_prefix = focus.deck_prefix if focus else None
