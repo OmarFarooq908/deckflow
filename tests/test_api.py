@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app
+from api.main import app, clear_repo_cache
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_deck.md"
 V2_PROJECT = Path(__file__).parent.parent / "examples" / "python-de-interview"
@@ -14,6 +14,7 @@ PYTHON_DECK = Path(
 
 @pytest.fixture()
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    clear_repo_cache()
     db_path = tmp_path / "api.db"
     monkeypatch.setenv("DECKFLOW_DB", str(db_path))
     return TestClient(app)
@@ -35,6 +36,7 @@ def test_api_import_review_flow(client: TestClient) -> None:
 
     review_response = client.post(f"/review/{card['id']}", json={"rating": 3})
     assert review_response.status_code == 200
+    assert review_response.json()["session_id"] >= 1
 
     decks = client.get("/decks")
     assert decks.status_code == 200
@@ -75,6 +77,36 @@ def test_api_library_and_focused_review(client: TestClient) -> None:
     )
     assert plan.status_code == 200
     assert isinstance(plan.json(), list)
+
+
+def test_api_review_session_persists_across_requests(client: TestClient) -> None:
+    client.post("/import", json={"path": str(FIXTURE)})
+
+    session_ids: list[int] = []
+    for _ in range(3):
+        card_response = client.get("/review/next")
+        card = card_response.json()
+        assert card is not None
+        review_response = client.post(f"/review/{card['id']}", json={"rating": 3})
+        assert review_response.status_code == 200
+        session_ids.append(review_response.json()["session_id"])
+
+    assert len(set(session_ids)) == 1
+
+
+def test_api_review_session_reset_starts_new_session(client: TestClient) -> None:
+    client.post("/import", json={"path": str(FIXTURE)})
+
+    card = client.get("/review/next").json()
+    first = client.post(f"/review/{card['id']}", json={"rating": 3}).json()
+
+    reset = client.post("/review/session/reset")
+    assert reset.status_code == 204
+
+    card = client.get("/review/next").json()
+    second = client.post(f"/review/{card['id']}", json={"rating": 3}).json()
+
+    assert first["session_id"] != second["session_id"]
 
 
 @pytest.mark.skipif(not PYTHON_DECK.exists(), reason="PYTHON_DECK.md not available")

@@ -93,6 +93,7 @@ class ReviewResult:
     card: CardRow
     due: datetime
     reps: int
+    session_id: int
 
 
 @dataclass
