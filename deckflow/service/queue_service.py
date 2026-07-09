@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from datetime import UTC, datetime
 from typing import Any
 
@@ -43,7 +44,7 @@ def build_daily_queue(
         if scheduling is None:
             continue
         card_config = repo.get_scheduling_config_for_card(card.id)
-        if card_config.get("suspend"):
+        if repo.is_card_scheduling_blocked(card.id):
             continue
         is_new = scheduling.reps == 0
         if is_new:
@@ -71,6 +72,8 @@ def build_daily_queue(
                 scored,
                 key=lambda item: (item.card.deck_path, item.card.card_index, -item.score),
             )
+        elif review_order == "random":
+            best = random.choice(scored)
         else:
             best = max(scored, key=lambda item: item.score)
 
