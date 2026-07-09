@@ -37,6 +37,7 @@ def import_compiled(repo: Repository, compiled: CompiledCollection) -> dict[str,
         )
 
     deck_ids: dict[str, int] = {}
+    imported_card_ids: dict[int, set[int]] = {}
     deck_meta_by_path = {deck.path: deck for deck in parsed.decks}
     imported = 0
     suspended = 0
@@ -71,10 +72,15 @@ def import_compiled(repo: Repository, compiled: CompiledCollection) -> dict[str,
                 meta=deck_meta_payload,
                 collection_id=collection_id,
             )
-        repo.upsert_card(deck_ids[card.deck_path], card)
+        card_id = repo.upsert_card(deck_ids[card.deck_path], card)
+        imported_card_ids.setdefault(deck_ids[card.deck_path], set()).add(card_id)
         imported += 1
         if card.status == "suspended":
             suspended += 1
+
+    for deck_id, keep_ids in imported_card_ids.items():
+        repo.delete_cards_not_in(deck_id, keep_ids)
+    repo.prune_decks_not_in(source_file, set(deck_ids.values()))
 
     for deck_meta in parsed.decks:
         for tag in deck_meta.tags:
