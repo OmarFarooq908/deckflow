@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from deckflow.db.repository import Repository
-from deckflow.models.domain import ReviewFocus
+from deckflow.models.domain import ParsedCard, ReviewFocus
 from deckflow.service.import_service import import_deck
 from deckflow.service.queue_service import build_daily_queue
 from deckflow.service.review_service import get_next_card
@@ -63,3 +63,65 @@ def test_get_next_card_with_focus(repo: Repository) -> None:
     assert card is not None
     assert card.deck_path.startswith("Sample::Basics")
     assert reason and "focused:" in reason
+
+
+def test_concept_fatigue_deprioritizes_shared_concepts(repo: Repository) -> None:
+    deck_id = repo.upsert_deck("Test::Fatigue", "test")
+    shared = ParsedCard(
+        deck_path="Test::Fatigue",
+        card_index=1001,
+        source_line=1,
+        front_md="shared question",
+        back_md="shared answer",
+        card_uid="fatigue-shared-a",
+        concepts=["shared::concept"],
+    )
+    shared_sibling = ParsedCard(
+        deck_path="Test::Fatigue",
+        card_index=1002,
+        source_line=1,
+        front_md="shared question 2",
+        back_md="shared answer 2",
+        card_uid="fatigue-shared-b",
+        concepts=["shared::concept"],
+    )
+    other = ParsedCard(
+        deck_path="Test::Fatigue",
+        card_index=1003,
+        source_line=1,
+        front_md="other question",
+        back_md="other answer",
+        card_uid="fatigue-other",
+        concepts=["other::concept"],
+    )
+    repo.upsert_card(deck_id, shared)
+    repo.upsert_card(deck_id, shared_sibling)
+    repo.upsert_card(deck_id, other)
+
+    queue = build_daily_queue(repo, limit=2)
+    fronts = [item.card.front_md for item in queue]
+
+    assert len(fronts) == 2
+    assert "other question" in fronts
+    assert fronts[0] in {"shared question", "shared question 2"}
+    assert fronts[1] == "other question"
+
+
+def test_concept_fatigue_applies_during_scoring(repo: Repository) -> None:
+    import_deck(repo, ADVANCED)
+    from deckflow.service import queue_service
+
+    sizes_at_call: list[int] = []
+    original = queue_service._concept_fatigue
+
+    def capture(card_id: int, repo: Repository, recent: list[str]) -> float:
+        sizes_at_call.append(len(recent))
+        return original(card_id, repo, recent)
+
+    queue_service._concept_fatigue = capture
+    try:
+        queue_service.build_daily_queue(repo, limit=3)
+    finally:
+        queue_service._concept_fatigue = original
+
+    assert any(size > 0 for size in sizes_at_call)
