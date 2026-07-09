@@ -324,10 +324,10 @@ class AnalyticsMixin:
             if i < weeks - 1:
                 end = now - timedelta(weeks=weeks - i - 1)
                 bounds = "reviewed_at >= ? AND reviewed_at < ?"
-                params = (start.isoformat(), end.isoformat())
+                query_params: tuple[str, ...] = (start.isoformat(), end.isoformat())
             else:
                 bounds = "reviewed_at >= ?"
-                params = (start.isoformat(),)
+                query_params = (start.isoformat(),)
             row = conn.execute(
                 f"""
                 SELECT COUNT(*) AS reviews,
@@ -335,7 +335,7 @@ class AnalyticsMixin:
                 FROM reviews
                 WHERE {bounds}
                 """,
-                params,
+                query_params,
             ).fetchone()
             reviews = int(row["reviews"] or 0)
             good = int(row["good"] or 0)
