@@ -42,6 +42,47 @@ export interface AnalyticsOverview {
   total_cards: number;
 }
 
+export interface ActivityPoint {
+  date: string;
+  reviews: number;
+  good: number;
+  again: number;
+}
+
+export interface RetentionTrendPoint {
+  period: string;
+  reviews: number;
+  retention_pct: number;
+}
+
+export interface RatingBucket {
+  rating: number;
+  label: string;
+  count: number;
+}
+
+export interface DeckWorkload {
+  label: string;
+  due: number;
+  total: number;
+}
+
+export interface RetrievabilityPoint {
+  date: string;
+  avg_retrievability: number;
+}
+
+export interface AnalyticsDashboard {
+  overview: AnalyticsOverview;
+  activity: ActivityPoint[];
+  retention_trend: RetentionTrendPoint[];
+  ratings: RatingBucket[];
+  deck_workload: DeckWorkload[];
+  mastery_top: ConceptMastery[];
+  mastery_bottom: ConceptMastery[];
+  retrievability_trend: RetrievabilityPoint[];
+}
+
 export interface ConceptMastery {
   concept_id: number;
   slug: string;
@@ -216,6 +257,10 @@ export function fetchDecks(): Promise<Deck[]> {
 
 export function fetchAnalyticsOverview(): Promise<AnalyticsOverview> {
   return request<AnalyticsOverview>("/analytics/overview");
+}
+
+export function fetchAnalyticsDashboard(): Promise<AnalyticsDashboard> {
+  return request<AnalyticsDashboard>("/analytics/dashboard");
 }
 
 export function fetchConceptMastery(): Promise<ConceptMastery[]> {

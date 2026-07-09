@@ -287,6 +287,118 @@ class AnalyticsMixin:
             for row in rows
         ]
 
+    _RATING_LABELS = {1: "Again", 2: "Hard", 3: "Good", 4: "Easy"}
+
+    def daily_activity(self, days: int = 30) -> list[dict[str, Any]]:
+        conn = self.connect()
+        since = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+        rows = conn.execute(
+            """
+            SELECT date(reviewed_at) AS day,
+                   COUNT(*) AS reviews,
+                   SUM(CASE WHEN rating >= 3 THEN 1 ELSE 0 END) AS good,
+                   SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) AS again
+            FROM reviews
+            WHERE reviewed_at >= ?
+            GROUP BY day
+            ORDER BY day
+            """,
+            (since,),
+        ).fetchall()
+        return [
+            {
+                "date": row["day"],
+                "reviews": int(row["reviews"]),
+                "good": int(row["good"] or 0),
+                "again": int(row["again"] or 0),
+            }
+            for row in rows
+        ]
+
+    def retention_trend(self, weeks: int = 12) -> list[dict[str, Any]]:
+        conn = self.connect()
+        now = datetime.now(UTC)
+        result: list[dict[str, Any]] = []
+        for i in range(weeks):
+            start = now - timedelta(weeks=weeks - i)
+            if i < weeks - 1:
+                end = now - timedelta(weeks=weeks - i - 1)
+                bounds = "reviewed_at >= ? AND reviewed_at < ?"
+                query_params: tuple[str, ...] = (start.isoformat(), end.isoformat())
+            else:
+                bounds = "reviewed_at >= ?"
+                query_params = (start.isoformat(),)
+            row = conn.execute(
+                f"""
+                SELECT COUNT(*) AS reviews,
+                       SUM(CASE WHEN rating >= 3 THEN 1 ELSE 0 END) AS good
+                FROM reviews
+                WHERE {bounds}
+                """,
+                query_params,
+            ).fetchone()
+            reviews = int(row["reviews"] or 0)
+            good = int(row["good"] or 0)
+            retention = round(100.0 * good / reviews, 1) if reviews else 0.0
+            result.append(
+                {
+                    "period": start.date().isoformat(),
+                    "reviews": reviews,
+                    "retention_pct": retention,
+                }
+            )
+        return result
+
+    def rating_distribution(self, days: int = 30) -> list[dict[str, Any]]:
+        conn = self.connect()
+        since = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+        rows = conn.execute(
+            """
+            SELECT rating, COUNT(*) AS cnt
+            FROM reviews
+            WHERE reviewed_at >= ?
+            GROUP BY rating
+            ORDER BY rating
+            """,
+            (since,),
+        ).fetchall()
+        return [
+            {
+                "rating": int(row["rating"]),
+                "label": self._RATING_LABELS[int(row["rating"])],
+                "count": int(row["cnt"]),
+            }
+            for row in rows
+        ]
+
+    def deck_workload_by_prefix(self, depth: int = 2) -> list[dict[str, Any]]:
+        aggregated: dict[str, dict[str, Any]] = {}
+        for deck in self.list_decks():
+            parts = deck.path.split("::")
+            prefix_parts = parts[:depth]
+            key = "::".join(prefix_parts)
+            label = prefix_parts[-1] if prefix_parts else deck.path
+            if key not in aggregated:
+                aggregated[key] = {"label": label, "due": 0, "total": 0}
+            aggregated[key]["due"] += deck.due_count
+            aggregated[key]["total"] += deck.card_count
+        return sorted(aggregated.values(), key=lambda row: row["due"], reverse=True)
+
+    def avg_retrievability_trend(self, days: int = 30) -> list[dict[str, Any]]:
+        conn = self.connect()
+        since = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+        rows = conn.execute(
+            """
+            SELECT date(reviewed_at) AS day, AVG(retrievability) AS avg_r
+            FROM reviews
+            WHERE reviewed_at >= ? AND retrievability IS NOT NULL
+            GROUP BY day
+            ORDER BY day
+            """,
+            (since,),
+        ).fetchall()
+        return [{"date": row["day"], "avg_retrievability": float(row["avg_r"])} for row in rows]
+
     def get_last_import_path(self) -> str | None:
         conn = self.connect()
         row = conn.execute(

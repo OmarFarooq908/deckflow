@@ -232,3 +232,15 @@ class LearningLibrary:
     modules: list[LibraryNode]
     topics: list[LibraryNode]
     tracks: list[TrackSummary]
+
+
+@dataclass
+class AnalyticsDashboard:
+    overview: AnalyticsOverview
+    activity: list[dict[str, Any]]
+    retention_trend: list[dict[str, Any]]
+    ratings: list[dict[str, Any]]
+    deck_workload: list[dict[str, Any]]
+    mastery_top: list[ConceptMastery]
+    mastery_bottom: list[ConceptMastery]
+    retrievability_trend: list[dict[str, Any]]
