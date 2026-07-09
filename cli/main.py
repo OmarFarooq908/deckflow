@@ -137,10 +137,13 @@ def review(
         typer.echo(f"Focus: {label}")
 
     reviewed = 0
+    skipped: set[int] = set()
     while reviewed < limit:
-        card, reason = get_next_card(repo, focus=focus)
+        card, reason = get_next_card(repo, focus=focus, exclude_card_ids=skipped)
         if card is None:
-            if reviewed == 0:
+            if reviewed == 0 and skipped:
+                typer.echo("No cards left to review (due cards were skipped).")
+            elif reviewed == 0:
                 typer.echo("No cards due for review.")
             else:
                 typer.echo(f"Review session complete. Reviewed {reviewed} card(s).")
@@ -160,6 +163,7 @@ def review(
         typer.echo("-" * 60)
 
         if not typer.confirm("Reveal answer?", default=True):
+            skipped.add(card.id)
             typer.echo("Skipped.")
             continue
 
