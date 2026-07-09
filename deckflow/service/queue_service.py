@@ -32,42 +32,32 @@ def build_daily_queue(
     new_today = repo.count_new_cards_today(now)
     new_budget_left = max(0, new_per_day - new_today)
 
-    scored: list[QueueCard] = []
-    recent_concepts: list[str] = []
-
+    pool: list[CardRow] = []
     for card in candidates:
         scheduling = repo.get_scheduling(card.id)
         if scheduling is None:
             continue
-
         is_new = scheduling.reps == 0
         if is_new and new_budget_left <= 0:
             continue
+        pool.append(card)
 
-        due_urgency = _due_urgency(scheduling.due, now)
-        weakness = repo.get_weakness_for_card(card.id)
-        priority = _priority_weight(card)
-        concept_penalty = _concept_fatigue(card.id, repo, recent_concepts)
+    result: list[QueueCard] = []
+    recent_concepts: list[str] = []
 
-        score = due_urgency * 3.0 + weakness * 2.0 + priority * 1.5 - concept_penalty * 1.0
-        if is_new:
-            score += 1.0
+    while pool and len(result) < limit:
+        scored = [_score_card(card, repo, now, recent_concepts, focus) for card in pool]
+        if review_order == "deck":
+            best = min(
+                scored,
+                key=lambda item: (item.card.deck_path, item.card.card_index, -item.score),
+            )
+        else:
+            best = max(scored, key=lambda item: item.score)
 
-        reason = _build_reason(due_urgency, weakness, priority, is_new, card, repo)
-        if focus and (focus.deck_prefix or focus.concept_slug):
-            focus_label = focus.deck_prefix or focus.concept_slug or focus.track_id
-            reason = f"focused: {focus_label}; {reason}"
-        scored.append(QueueCard(card=card, score=score, reason=reason))
-
-    if review_order == "deck":
-        scored.sort(key=lambda item: (item.card.deck_path, item.card.card_index, -item.score))
-    else:
-        scored.sort(key=lambda item: item.score, reverse=True)
-
-    result = scored[:limit]
-
-    for item in result:
-        for slug in repo.get_card_concept_slugs(item.card.id)[:2]:
+        result.append(best)
+        pool = [card for card in pool if card.id != best.card.id]
+        for slug in repo.get_card_concept_slugs(best.card.id)[:2]:
             recent_concepts.append(slug)
 
     return result
@@ -77,6 +67,33 @@ def resolve_track_focus(repo: Repository, track_id: str) -> ReviewFocus | None:
     from deckflow.service.library_service import get_track_focus
 
     return get_track_focus(repo, track_id)
+
+
+def _score_card(
+    card: CardRow,
+    repo: Repository,
+    now: datetime,
+    recent_concepts: list[str],
+    focus: ReviewFocus | None,
+) -> QueueCard:
+    scheduling = repo.get_scheduling(card.id)
+    assert scheduling is not None
+
+    is_new = scheduling.reps == 0
+    due_urgency = _due_urgency(scheduling.due, now)
+    weakness = repo.get_weakness_for_card(card.id)
+    priority = _priority_weight(card)
+    concept_penalty = _concept_fatigue(card.id, repo, recent_concepts)
+
+    score = due_urgency * 3.0 + weakness * 2.0 + priority * 1.5 - concept_penalty * 1.0
+    if is_new:
+        score += 1.0
+
+    reason = _build_reason(due_urgency, weakness, priority, is_new, card, repo)
+    if focus and (focus.deck_prefix or focus.concept_slug):
+        focus_label = focus.deck_prefix or focus.concept_slug or focus.track_id
+        reason = f"focused: {focus_label}; {reason}"
+    return QueueCard(card=card, score=score, reason=reason)
 
 
 def _due_urgency(due: datetime, now: datetime) -> float:
