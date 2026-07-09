@@ -15,12 +15,12 @@ import {
 import { DueBadge } from "@/components/DueBadge";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { InsightsDashboard } from "@/components/insights/InsightsDashboard";
+import { ConceptMasteryRow } from "@/components/insights/ConceptMasteryRow";
 import { LoadingState } from "@/components/LoadingState";
 import { PageHeader } from "@/components/PageHeader";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { reviewUrl } from "@/lib/format";
 
@@ -133,15 +133,7 @@ export function StatsPage() {
           ) : (
             <div className="space-y-3">
               {concepts.slice(0, 16).map((concept) => (
-                <div key={concept.concept_id} className="space-y-1.5">
-                  <div className="flex justify-between text-sm">
-                    <span>{concept.label || concept.slug}</span>
-                    <span className="text-muted-foreground">
-                      {concept.mastery_score.toFixed(0)}%
-                    </span>
-                  </div>
-                  <Progress value={concept.mastery_score} className="h-2" />
-                </div>
+                <ConceptMasteryRow key={concept.concept_id} concept={concept} />
               ))}
             </div>
           )}
