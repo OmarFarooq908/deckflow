@@ -168,12 +168,38 @@ export interface ReviewFocusParams {
   track?: string;
 }
 
-function focusQuery(params?: ReviewFocusParams): string {
-  if (!params) return "";
+export interface CardReviewHistoryEntry {
+  rating: number;
+  reviewed_at: string;
+  reveal_ms: number | null;
+  rating_ms: number | null;
+  retrievability: number | null;
+  stability: number | null;
+  difficulty: number | null;
+  state: string | null;
+}
+
+export interface CardAnalytics {
+  card_id: number;
+  card_uid: string | null;
+  deck_path: string;
+  tags: string[];
+  concepts: string[];
+  reps: number;
+  lapses: number;
+  due: string | null;
+  reviews: CardReviewHistoryEntry[];
+}
+
+function focusQuery(params?: ReviewFocusParams, excludeCardIds?: number[]): string {
+  if (!params && !excludeCardIds?.length) return "";
   const search = new URLSearchParams();
-  if (params.deck) search.set("deck_prefix", params.deck);
-  if (params.concept) search.set("concept_slug", params.concept);
-  if (params.track) search.set("track_id", params.track);
+  if (params?.deck) search.set("deck_prefix", params.deck);
+  if (params?.concept) search.set("concept_slug", params.concept);
+  if (params?.track) search.set("track_id", params.track);
+  for (const cardId of excludeCardIds ?? []) {
+    search.append("exclude_card_ids", String(cardId));
+  }
   const query = search.toString();
   return query ? `?${query}` : "";
 }
@@ -220,8 +246,11 @@ export function fetchStats(): Promise<Stats> {
   return request<Stats>("/stats");
 }
 
-export function fetchNextCard(focus?: ReviewFocusParams): Promise<Card | null> {
-  return request<Card | null>(`/review/next${focusQuery(focus)}`);
+export function fetchNextCard(
+  focus?: ReviewFocusParams,
+  excludeCardIds?: number[],
+): Promise<Card | null> {
+  return request<Card | null>(`/review/next${focusQuery(focus, excludeCardIds)}`);
 }
 
 export function submitReview(
@@ -266,6 +295,10 @@ export function fetchAnalyticsDashboard(): Promise<AnalyticsDashboard> {
 
 export function fetchConceptMastery(): Promise<ConceptMastery[]> {
   return request<ConceptMastery[]>("/analytics/concepts");
+}
+
+export function fetchCardAnalytics(cardId: number): Promise<CardAnalytics> {
+  return request<CardAnalytics>(`/analytics/cards/${cardId}`);
 }
 
 export function fetchWeakSpots(): Promise<WeakSpot[]> {

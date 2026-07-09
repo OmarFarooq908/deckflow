@@ -8,6 +8,7 @@ import {
   resetReviewSession,
   submitReview,
 } from "@/api";
+import { CardAnalyticsPanel } from "@/components/CardAnalyticsPanel";
 import { DeckBreadcrumb } from "@/components/DeckBreadcrumb";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorAlert } from "@/components/ErrorAlert";
@@ -59,14 +60,17 @@ export function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [done, setDone] = useState(false);
+  const [skippedAll, setSkippedAll] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const shownAt = useRef<number>(Date.now());
   const revealedAt = useRef<number | null>(null);
   const sessionId = useRef<number | undefined>(undefined);
   const submittingRef = useRef(false);
+  const skippedCardIds = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     sessionId.current = undefined;
+    skippedCardIds.current = new Set();
     void resetReviewSession().catch(() => undefined);
   }, [deck, concept, track]);
 
@@ -76,9 +80,12 @@ export function ReviewPage() {
     setRevealed(false);
     revealedAt.current = null;
     const focusParams: ReviewFocusParams = { deck, concept, track };
+    const excludeCardIds = [...skippedCardIds.current];
     try {
-      const next = await fetchNextCard(focusParams);
+      const next = await fetchNextCard(focusParams, excludeCardIds);
+      const skippedCount = skippedCardIds.current.size;
       setCard(next);
+      setSkippedAll(next === null && skippedCount > 0);
       setDone(next === null);
       shownAt.current = Date.now();
     } catch (err) {
@@ -87,6 +94,12 @@ export function ReviewPage() {
       setLoading(false);
     }
   }, [deck, concept, track]);
+
+  async function handleSkip() {
+    if (!card || submittingRef.current) return;
+    skippedCardIds.current.add(card.id);
+    await loadNext();
+  }
 
   useEffect(() => {
     void loadNext();
@@ -149,9 +162,13 @@ export function ReviewPage() {
         icon={<CheckCircle2 className="h-10 w-10" />}
         title="All caught up"
         description={
-          studying
-            ? `No cards due in "${studying}" right now.`
-            : "No cards are due for review right now."
+          skippedAll
+            ? studying
+              ? `No cards left in "${studying}" (remaining due cards were skipped).`
+              : "No cards left to review (due cards were skipped)."
+            : studying
+              ? `No cards due in "${studying}" right now.`
+              : "No cards are due for review right now."
         }
         actionLabel="Browse library"
         actionTo="/library"
@@ -212,6 +229,7 @@ export function ReviewPage() {
             </TooltipContent>
           </Tooltip>
         )}
+        <CardAnalyticsPanel cardId={card.id} />
       </div>
 
       {card.objective && (
@@ -240,12 +258,23 @@ export function ReviewPage() {
           )}
 
           {!revealed ? (
-            <Button className="w-full" size="lg" onClick={() => {
-              revealedAt.current = Date.now();
-              setRevealed(true);
-            }}>
-              Reveal answer
-            </Button>
+            <div className="space-y-2">
+              <Button className="w-full" size="lg" onClick={() => {
+                revealedAt.current = Date.now();
+                setRevealed(true);
+              }}>
+                Reveal answer
+              </Button>
+              <Button
+                className="w-full"
+                variant="outline"
+                size="sm"
+                disabled={submitting}
+                onClick={() => void handleSkip()}
+              >
+                Skip for now
+              </Button>
+            </div>
           ) : (
             <>
               {card.links && card.links.length > 0 && (
@@ -279,6 +308,15 @@ export function ReviewPage() {
               <p className="text-center text-xs text-muted-foreground">
                 Keyboard: press 1–4 to rate
               </p>
+              <Button
+                className="w-full"
+                variant="ghost"
+                size="sm"
+                disabled={submitting}
+                onClick={() => void handleSkip()}
+              >
+                Skip for now
+              </Button>
             </>
           )}
         </CardContent>

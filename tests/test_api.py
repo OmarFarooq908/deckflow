@@ -120,3 +120,46 @@ def test_import_real_python_deck(client: TestClient) -> None:
     stats = client.get("/stats").json()
     assert stats["total_cards"] == 200
     assert stats["due_today"] == 200
+
+
+def test_api_review_skip_excludes_card(client: TestClient) -> None:
+    client.post("/import", json={"path": str(FIXTURE)})
+
+    first = client.get("/review/next").json()
+    assert first is not None
+    second = client.get("/review/next", params={"exclude_card_ids": [first["id"]]}).json()
+    assert second is not None
+    assert second["id"] != first["id"]
+
+    third = client.get(
+        "/review/next",
+        params={"exclude_card_ids": [first["id"], second["id"]]},
+    ).json()
+    assert third is not None
+    assert third["id"] not in {first["id"], second["id"]}
+
+    exhausted = client.get(
+        "/review/next",
+        params={"exclude_card_ids": [first["id"], second["id"], third["id"]]},
+    ).json()
+    assert exhausted is None
+
+
+def test_api_card_analytics(client: TestClient) -> None:
+    client.post("/import", json={"path": str(FIXTURE)})
+
+    card = client.get("/review/next").json()
+    assert card is not None
+
+    analytics = client.get(f"/analytics/cards/{card['id']}")
+    assert analytics.status_code == 200
+    payload = analytics.json()
+    assert payload["card_id"] == card["id"]
+    assert payload["reps"] == 0
+    assert payload["reviews"] == []
+
+    client.post(f"/review/{card['id']}", json={"rating": 3})
+    updated = client.get(f"/analytics/cards/{card['id']}").json()
+    assert updated["reps"] == 1
+    assert len(updated["reviews"]) == 1
+    assert updated["reviews"][0]["rating"] == 3

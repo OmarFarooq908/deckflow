@@ -157,7 +157,7 @@ export function StatsPage() {
               <Card key={deck.id}>
                 <CardContent className="flex items-center justify-between gap-3 p-4">
                   <Button asChild variant="link" className="h-auto p-0 text-left">
-                    <Link to="/library">{deck.path}</Link>
+                    <Link to={reviewUrl(deck.path)}>{deck.path}</Link>
                   </Button>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <DueBadge count={deck.due_count} />

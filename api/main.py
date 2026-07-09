@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -309,10 +309,12 @@ def review_next(
     deck_prefix: str | None = None,
     concept_slug: str | None = None,
     track_id: str | None = None,
+    exclude_card_ids: list[int] = Query(default=[]),
 ) -> CardResponse | None:
     repo = get_repo()
     focus = _build_focus(deck_prefix, concept_slug, track_id)
-    card, reason = get_next_card(repo, focus=focus)
+    excluded = set(exclude_card_ids) if exclude_card_ids else None
+    card, reason = get_next_card(repo, focus=focus, exclude_card_ids=excluded)
     if card is None:
         return None
     return _card_response(repo, card, reason)
