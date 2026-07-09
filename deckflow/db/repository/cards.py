@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from deckflow.db.repository._helpers import card_meta, dump_json, row_to_card
+from deckflow.local_time import local_day_start
 from deckflow.models.domain import CardRow, ParsedCard, SchedulingRow
 
 
@@ -325,8 +326,7 @@ class CardsMixin:
 
     def count_new_cards_today(self, now: datetime | None = None) -> int:
         conn = self.connect()
-        now = now or datetime.now(UTC)
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        start = local_day_start(now)
         row = conn.execute(
             """
             SELECT COUNT(*) AS cnt FROM reviews r
