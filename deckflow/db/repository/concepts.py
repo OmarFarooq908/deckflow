@@ -33,13 +33,13 @@ class ConceptsMixin:
         weight: float = 1.0,
     ) -> None:
         conn = self.connect()
+        conn.execute("DELETE FROM card_concepts WHERE card_id = ?", (card_id,))
         for slug in concept_slugs:
             concept_id = self.upsert_concept(slug)
             conn.execute(
                 """
                 INSERT INTO card_concepts (card_id, concept_id, weight)
                 VALUES (?, ?, ?)
-                ON CONFLICT(card_id, concept_id) DO UPDATE SET weight = excluded.weight
                 """,
                 (card_id, concept_id, weight),
             )

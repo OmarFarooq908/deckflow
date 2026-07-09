@@ -128,9 +128,10 @@ class CardsMixin:
                 (card_id, fsrs_card.due.isoformat(), card_to_json(fsrs_card)),
             )
 
-        concept_slugs = list(card.concepts) if card.concepts else list(card.tags)
-        if concept_slugs:
-            self.link_card_concepts(card_id, concept_slugs, weight=1.0)
+        if card.concepts:
+            self.link_card_concepts(card_id, list(card.concepts), weight=1.0)
+        else:
+            self.link_card_concepts(card_id, list(card.tags), weight=0.5)
         conn.commit()
         return card_id
 
