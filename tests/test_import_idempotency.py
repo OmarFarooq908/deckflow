@@ -103,3 +103,67 @@ def test_reimport_clears_concept_links_when_removed(repo: Repository) -> None:
     )
     repo.upsert_card(deck_id, cleared)
     assert repo.get_card_concept_slugs(card_id) == ["fallback-tag"]
+
+
+def test_reimport_prunes_cards_removed_from_source(repo: Repository) -> None:
+    from deckflow.models.domain import ParsedCard
+
+    import_deck(repo, FIXTURE)
+    row = repo.connect().execute("SELECT id FROM decks LIMIT 1").fetchone()
+    assert row is not None
+    deck_id = int(row["id"])
+
+    orphan_id = repo.upsert_card(
+        deck_id,
+        ParsedCard(
+            deck_path="Sample::Basics",
+            card_index=999001,
+            source_line=1,
+            front_md="orphan",
+            back_md="gone",
+            card_uid="orphan-card",
+        ),
+    )
+    assert repo.count_total_cards() == 4
+    assert repo.get_card(orphan_id) is not None
+
+    import_deck(repo, FIXTURE)
+
+    assert repo.count_total_cards() == 3
+    assert repo.get_card(orphan_id) is None
+
+
+def test_reimport_prunes_decks_removed_from_source(repo: Repository) -> None:
+    from deckflow.models.domain import ParsedCard
+
+    import_deck(repo, FIXTURE)
+    source_row = repo.connect().execute("SELECT source_file FROM decks LIMIT 1").fetchone()
+    assert source_row is not None
+    source_file = str(source_row["source_file"])
+
+    extra_deck_id = repo.upsert_deck("Sample::Removed", source_file)
+    repo.upsert_card(
+        extra_deck_id,
+        ParsedCard(
+            deck_path="Sample::Removed",
+            card_index=1,
+            source_line=1,
+            front_md="orphan deck",
+            back_md="gone",
+            card_uid="orphan-deck-card",
+        ),
+    )
+    assert repo.count_total_cards() == 4
+
+    import_deck(repo, FIXTURE)
+
+    assert repo.count_total_cards() == 3
+    row = (
+        repo.connect()
+        .execute(
+            "SELECT id FROM decks WHERE path = ? AND source_file = ?",
+            ("Sample::Removed", source_file),
+        )
+        .fetchone()
+    )
+    assert row is None
