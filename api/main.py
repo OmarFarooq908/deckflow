@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -309,11 +309,11 @@ def review_next(
     deck_prefix: str | None = None,
     concept_slug: str | None = None,
     track_id: str | None = None,
-    exclude_card_ids: list[int] = Query(default=[]),
+    exclude_card_ids: Annotated[list[int] | None, Query()] = None,
 ) -> CardResponse | None:
     repo = get_repo()
     focus = _build_focus(deck_prefix, concept_slug, track_id)
-    excluded = set(exclude_card_ids) if exclude_card_ids else None
+    excluded = set(exclude_card_ids or []) or None
     card, reason = get_next_card(repo, focus=focus, exclude_card_ids=excluded)
     if card is None:
         return None
