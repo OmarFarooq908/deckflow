@@ -59,9 +59,11 @@ export function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [done, setDone] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const shownAt = useRef<number>(Date.now());
   const revealedAt = useRef<number | null>(null);
   const sessionId = useRef<number | undefined>(undefined);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     sessionId.current = undefined;
@@ -92,7 +94,7 @@ export function ReviewPage() {
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (!revealed || !card) return;
+      if (!revealed || !card || submittingRef.current) return;
       const rating = Number(event.key);
       if (rating >= 1 && rating <= 4) {
         void handleRate(rating);
@@ -101,11 +103,14 @@ export function ReviewPage() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revealed, card]);
+  }, [revealed, card, submitting]);
 
   async function handleRate(rating: number) {
-    if (!card) return;
+    if (!card || submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
     setError(null);
+    const cardId = card.id;
     const now = Date.now();
     const reveal_ms = revealedAt.current
       ? revealedAt.current - shownAt.current
@@ -114,7 +119,7 @@ export function ReviewPage() {
       ? now - revealedAt.current
       : undefined;
     try {
-      const result = await submitReview(card.id, rating, {
+      const result = await submitReview(cardId, rating, {
         reveal_ms,
         rating_ms,
         session_id: sessionId.current,
@@ -124,6 +129,9 @@ export function ReviewPage() {
       await loadNext();
     } catch (err) {
       setError(err);
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   }
 
@@ -258,6 +266,7 @@ export function ReviewPage() {
                     <TooltipTrigger asChild>
                       <Button
                         className={cn("w-full text-white", rating.className)}
+                        disabled={submitting}
                         onClick={() => void handleRate(rating.value)}
                       >
                         {rating.label}
