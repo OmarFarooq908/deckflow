@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from deckflow.local_time import local_day_start, local_today, reviewed_at_local_date
 from deckflow.models.domain import ConceptMastery, DeckSummary
 
 
@@ -215,8 +216,7 @@ class AnalyticsMixin:
 
     def count_reviewed_today(self, now: datetime | None = None) -> int:
         conn = self.connect()
-        now = now or datetime.now(UTC)
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        start = local_day_start(now)
         row = conn.execute(
             "SELECT COUNT(*) AS cnt FROM reviews WHERE reviewed_at >= ?",
             (start.isoformat(),),
@@ -228,20 +228,23 @@ class AnalyticsMixin:
 
     def streak_days(self, now: datetime | None = None) -> int:
         conn = self.connect()
-        now = now or datetime.now(UTC)
         rows = conn.execute(
             """
-            SELECT DISTINCT date(reviewed_at) AS review_day
-            FROM reviews ORDER BY review_day DESC
+            SELECT reviewed_at
+            FROM reviews
+            ORDER BY reviewed_at DESC
             """
         ).fetchall()
         if not rows:
             return 0
 
+        review_days = sorted(
+            {reviewed_at_local_date(row["reviewed_at"]) for row in rows},
+            reverse=True,
+        )
         streak = 0
-        expected = now.date()
-        for row in rows:
-            review_day = date.fromisoformat(row["review_day"])
+        expected = local_today(now)
+        for review_day in review_days:
             if review_day == expected:
                 streak += 1
                 expected = expected.fromordinal(expected.toordinal() - 1)
