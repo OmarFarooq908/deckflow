@@ -6,6 +6,7 @@ import { ErrorAlert } from "@/components/ErrorAlert";
 import { LoadingState } from "@/components/LoadingState";
 import { PageHeader } from "@/components/PageHeader";
 import { LibraryTree } from "@/components/library/LibraryTree";
+import { CollectionSummaryCard } from "@/components/library/CollectionSummaryCard";
 import { TrackCard } from "@/components/library/TrackCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,10 +40,15 @@ export function LibraryPage() {
       : collection
         ? [collection]
         : [];
-  const totalCards = collections.reduce((sum, item) => sum + item.card_count, 0);
-  const totalDue = collections.reduce((sum, item) => sum + item.due_count, 0);
-  const progressPct =
-    totalCards > 0 ? Math.round(((totalCards - totalDue) / totalCards) * 100) : 0;
+  const singleCollection = collections.length === 1 ? collections[0] : null;
+  const singleProgressPct =
+    singleCollection && singleCollection.card_count > 0
+      ? Math.round(
+          ((singleCollection.card_count - singleCollection.due_count) /
+            singleCollection.card_count) *
+            100,
+        )
+      : 0;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -60,21 +66,31 @@ export function LibraryPage() {
         }
       />
 
-      {collections.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">
-              {totalDue} due · {totalCards} total cards
-              {collections.length > 1 ? ` across ${collections.length} collections` : ""}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Progress value={progressPct} className="h-2" />
-            <p className="mt-2 text-xs text-muted-foreground">
-              {progressPct}% of cards not due right now
-            </p>
-          </CardContent>
-        </Card>
+      {collections.length > 1 ? (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium text-muted-foreground">Collections</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {collections.map((item) => (
+              <CollectionSummaryCard key={item.id} collection={item} />
+            ))}
+          </div>
+        </section>
+      ) : (
+        singleCollection && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium">
+                {singleCollection.due_count} due · {singleCollection.card_count} total cards
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Progress value={singleProgressPct} className="h-2" />
+              <p className="mt-2 text-xs text-muted-foreground">
+                {singleProgressPct}% of cards not due right now
+              </p>
+            </CardContent>
+          </Card>
+        )
       )}
 
       <div className="relative">
