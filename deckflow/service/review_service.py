@@ -88,7 +88,7 @@ def submit_review(
     )
     repo.refresh_mastery_for_card(card_id)
 
-    return ReviewResult(card=card, due=updated.due, reps=reps)
+    return ReviewResult(card=card, due=updated.due, reps=reps, session_id=session_id)
 
 
 def get_queue(
