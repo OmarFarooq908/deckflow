@@ -45,3 +45,61 @@ def test_review_preserves_card_count_on_reimport(repo: Repository) -> None:
     scheduling = repo.get_scheduling(card.id)
     assert scheduling is not None
     assert scheduling.reps == 1
+
+
+def test_reimport_replaces_stale_concept_links(repo: Repository) -> None:
+    from deckflow.models.domain import ParsedCard
+
+    deck_id = repo.upsert_deck("Test::Concepts", "test")
+    card = ParsedCard(
+        deck_path="Test::Concepts",
+        card_index=1001,
+        source_line=1,
+        front_md="question",
+        back_md="answer",
+        card_uid="concept-sync-test",
+        concepts=["alpha"],
+    )
+    card_id = repo.upsert_card(deck_id, card)
+    assert repo.get_card_concept_slugs(card_id) == ["alpha"]
+
+    updated = ParsedCard(
+        deck_path="Test::Concepts",
+        card_index=1001,
+        source_line=1,
+        front_md="question",
+        back_md="answer",
+        card_uid="concept-sync-test",
+        concepts=["beta"],
+    )
+    repo.upsert_card(deck_id, updated)
+    assert repo.get_card_concept_slugs(card_id) == ["beta"]
+
+
+def test_reimport_clears_concept_links_when_removed(repo: Repository) -> None:
+    from deckflow.models.domain import ParsedCard
+
+    deck_id = repo.upsert_deck("Test::Concepts", "test")
+    card = ParsedCard(
+        deck_path="Test::Concepts",
+        card_index=1002,
+        source_line=1,
+        front_md="question",
+        back_md="answer",
+        card_uid="concept-clear-test",
+        concepts=["alpha"],
+    )
+    card_id = repo.upsert_card(deck_id, card)
+
+    cleared = ParsedCard(
+        deck_path="Test::Concepts",
+        card_index=1002,
+        source_line=1,
+        front_md="question",
+        back_md="answer",
+        card_uid="concept-clear-test",
+        concepts=[],
+        tags=["fallback-tag"],
+    )
+    repo.upsert_card(deck_id, cleared)
+    assert repo.get_card_concept_slugs(card_id) == ["fallback-tag"]
