@@ -31,10 +31,15 @@ export function parseDeckPath(path: string): string[] {
   return path.split("::").filter(Boolean);
 }
 
-export function reviewUrl(deck?: string | null, concept?: string | null): string {
+export function reviewUrl(
+  deck?: string | null,
+  concept?: string | null,
+  track?: string | null,
+): string {
   const params = new URLSearchParams();
   if (deck) params.set("deck", deck);
   if (concept) params.set("concept", concept);
+  if (track) params.set("track", track);
   const query = params.toString();
   return query ? `/review?${query}` : "/review";
 }

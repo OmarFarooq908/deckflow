@@ -48,7 +48,7 @@ export function TrackCard({ track }: TrackCardProps) {
           ))}
         </div>
         <Button asChild>
-          <Link to={reviewUrl(track.focus_deck_prefix, track.focus_concept_slug)}>
+          <Link to={reviewUrl(undefined, undefined, track.id)}>
             Continue track
           </Link>
         </Button>
