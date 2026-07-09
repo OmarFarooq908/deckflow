@@ -85,3 +85,37 @@ def test_weak_spots_after_lapse(repo: Repository) -> None:
     submit_review(repo, card.id, rating=1)
     spots = get_weak_spots(repo, limit=5)
     assert isinstance(spots, list)
+
+
+def test_list_decks_excludes_suspended_from_due_count(repo: Repository) -> None:
+    from deckflow.models.domain import ParsedCard
+
+    deck_id = repo.upsert_deck("Test::Suspended", "test")
+    repo.upsert_card(
+        deck_id,
+        ParsedCard(
+            deck_path="Test::Suspended",
+            card_index=1001,
+            source_line=1,
+            front_md="active",
+            back_md="answer",
+            card_uid="active-card",
+        ),
+    )
+    repo.upsert_card(
+        deck_id,
+        ParsedCard(
+            deck_path="Test::Suspended",
+            card_index=1002,
+            source_line=1,
+            front_md="suspended",
+            back_md="answer",
+            card_uid="suspended-card",
+            status="suspended",
+        ),
+    )
+
+    deck = next(item for item in repo.list_decks() if item.id == deck_id)
+    assert deck.card_count == 2
+    assert deck.due_count == 1
+    assert repo.count_due() == 1

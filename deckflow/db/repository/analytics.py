@@ -260,7 +260,16 @@ class AnalyticsMixin:
             """
             SELECT d.id, d.path,
                 COUNT(c.id) AS card_count,
-                SUM(CASE WHEN s.due <= ? THEN 1 ELSE 0 END) AS due_count
+                SUM(
+                    CASE
+                        WHEN s.due <= ?
+                         AND COALESCE(
+                             json_extract(c.meta_json, '$.status'), 'active'
+                         ) != 'suspended'
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS due_count
             FROM decks d
             LEFT JOIN cards c ON c.deck_id = d.id
             LEFT JOIN scheduling s ON s.card_id = c.id
