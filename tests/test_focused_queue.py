@@ -65,6 +65,19 @@ def test_get_next_card_with_focus(repo: Repository) -> None:
     assert reason and "focused:" in reason
 
 
+def test_get_next_card_skips_excluded_ids(repo: Repository) -> None:
+    import_deck(repo, FIXTURE)
+    first, _ = get_next_card(repo)
+    assert first is not None
+    second, _ = get_next_card(repo, exclude_card_ids={first.id})
+    assert second is not None
+    assert second.id != first.id
+
+    queue = build_daily_queue(repo, limit=10)
+    all_excluded = {item.card.id for item in queue}
+    assert get_next_card(repo, exclude_card_ids=all_excluded) == (None, None)
+
+
 def test_concept_fatigue_deprioritizes_shared_concepts(repo: Repository) -> None:
     deck_id = repo.upsert_deck("Test::Fatigue", "test")
     shared = ParsedCard(
