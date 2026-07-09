@@ -114,7 +114,7 @@ def test_reviewing_new_card_consumes_deck_budget(repo: Repository) -> None:
         meta={"config": {"new_per_day": 1}},
         collection_id=collection_id,
     )
-    first = _add_new_card(repo, deck_id, "A::Deck", "a-1")
+    _add_new_card(repo, deck_id, "A::Deck", "a-1")
     _add_new_card(repo, deck_id, "A::Deck", "a-2")
 
     queue = build_daily_queue(repo, limit=10)
