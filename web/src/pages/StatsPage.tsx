@@ -1,24 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  AnalyticsOverview,
+  AnalyticsDashboard,
   ConceptMastery,
   Deck,
-  Stats,
   StudyPlanItem,
   WeakSpot,
-  fetchAnalyticsOverview,
+  fetchAnalyticsDashboard,
   fetchConceptMastery,
   fetchDecks,
-  fetchStats,
   fetchStudyPlan,
   fetchWeakSpots,
 } from "@/api";
 import { DueBadge } from "@/components/DueBadge";
 import { ErrorAlert } from "@/components/ErrorAlert";
+import { InsightsDashboard } from "@/components/insights/InsightsDashboard";
 import { LoadingState } from "@/components/LoadingState";
 import { PageHeader } from "@/components/PageHeader";
-import { StatCard } from "@/components/StatCard";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,8 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { reviewUrl } from "@/lib/format";
 
 export function StatsPage() {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
+  const [dashboard, setDashboard] = useState<AnalyticsDashboard | null>(null);
   const [concepts, setConcepts] = useState<ConceptMastery[]>([]);
   const [weakSpots, setWeakSpots] = useState<WeakSpot[]>([]);
   const [plan, setPlan] = useState<StudyPlanItem[]>([]);
@@ -37,16 +34,14 @@ export function StatsPage() {
 
   useEffect(() => {
     Promise.all([
-      fetchStats(),
-      fetchAnalyticsOverview(),
+      fetchAnalyticsDashboard(),
       fetchConceptMastery(),
       fetchWeakSpots(),
       fetchStudyPlan(),
       fetchDecks(),
     ])
-      .then(([statsData, overviewData, conceptsData, spotsData, planData, deckData]) => {
-        setStats(statsData);
-        setOverview(overviewData);
+      .then(([dashboardData, conceptsData, spotsData, planData, deckData]) => {
+        setDashboard(dashboardData);
         setConcepts(conceptsData);
         setWeakSpots(spotsData);
         setPlan(planData);
@@ -59,7 +54,7 @@ export function StatsPage() {
     return <ErrorAlert error={error} title="Could not load insights" />;
   }
 
-  if (!stats || !overview) {
+  if (!dashboard) {
     return <LoadingState />;
   }
 
@@ -84,14 +79,7 @@ export function StatsPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <StatCard label="Retention (7d)" value={`${overview.retention_7d}%`} />
-            <StatCard label="Retention (30d)" value={`${overview.retention_30d}%`} />
-            <StatCard label="Cards/day (7d)" value={overview.cards_per_day_7d} />
-            <StatCard label="Avg mastery" value={`${overview.avg_mastery}%`} />
-            <StatCard label="Due today" value={stats.due_today} />
-            <StatCard label="Streak" value={`${overview.streak_days}d`} />
-          </div>
+          <InsightsDashboard dashboard={dashboard} />
         </TabsContent>
 
         <TabsContent value="plan" className="space-y-3">
