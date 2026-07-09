@@ -1,4 +1,7 @@
-.PHONY: lint format test validate check install-dev
+.PHONY: lint format test validate check install-dev dev
+
+dev:
+	./scripts/dev.sh
 
 lint:
 	ruff check .
