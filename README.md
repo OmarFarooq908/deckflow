@@ -54,14 +54,21 @@ deckflow import my-learning
 ## Web UI
 
 ```bash
-# Terminal 1 — API on http://localhost:5174
-deckflow serve
-
-# Terminal 2 — Vite dev server on http://localhost:5173
-cd web && npm ci && npm run dev
+# One command — API + Vite (auto-picks free ports if 5173/5174 are taken)
+make dev
+# or: ./scripts/dev.sh
 ```
 
-Open **http://localhost:5173** in the browser (not 5174 — that port is the API). Use **Library** to browse modules, topics, and study tracks; click **Review** on any node for focused study.
+Defaults: web **http://localhost:5173**, API **http://localhost:5174**. The script prints the actual URLs if it moves to other ports.
+
+Manual (two terminals):
+
+```bash
+deckflow serve          # API
+cd web && npm run dev   # Vite — set DECKFLOW_API_PORT if the API is not on 5174
+```
+
+Open the **web** URL printed by the script (usually http://localhost:5173). Use **Library** to browse modules, topics, and study tracks; click **Review** on any node for focused study.
 
 ## LLM workflow
 
