@@ -13,6 +13,7 @@ from deckflow.models.domain import ReviewFocus, ReviewTelemetry
 from deckflow.service.analytics_service import (
     get_card_analytics,
     get_concepts,
+    get_dashboard,
     get_overview,
     get_study_plan,
     get_weak_spots,
@@ -143,6 +144,47 @@ class AnalyticsOverviewResponse(BaseModel):
     due_today: int
     reviewed_today: int
     total_cards: int
+
+
+class ActivityPointResponse(BaseModel):
+    date: str
+    reviews: int
+    good: int
+    again: int
+
+
+class RetentionTrendPointResponse(BaseModel):
+    period: str
+    reviews: int
+    retention_pct: float
+
+
+class RatingBucketResponse(BaseModel):
+    rating: int
+    label: str
+    count: int
+
+
+class DeckWorkloadResponse(BaseModel):
+    label: str
+    due: int
+    total: int
+
+
+class RetrievabilityPointResponse(BaseModel):
+    date: str
+    avg_retrievability: float
+
+
+class AnalyticsDashboardResponse(BaseModel):
+    overview: AnalyticsOverviewResponse
+    activity: list[ActivityPointResponse]
+    retention_trend: list[RetentionTrendPointResponse]
+    ratings: list[RatingBucketResponse]
+    deck_workload: list[DeckWorkloadResponse]
+    mastery_top: list[ConceptMasteryResponse]
+    mastery_bottom: list[ConceptMasteryResponse]
+    retrievability_trend: list[RetrievabilityPointResponse]
 
 
 class StudyPlanItemResponse(BaseModel):
@@ -348,6 +390,48 @@ def analytics_overview() -> AnalyticsOverviewResponse:
         due_today=overview.due_today,
         reviewed_today=overview.reviewed_today,
         total_cards=overview.total_cards,
+    )
+
+
+def _concept_mastery_response(c: Any) -> ConceptMasteryResponse:
+    return ConceptMasteryResponse(
+        concept_id=c.concept_id,
+        slug=c.slug,
+        label=c.label,
+        card_count=c.card_count,
+        reviews_count=c.reviews_count,
+        retention_7d=c.retention_7d,
+        retention_30d=c.retention_30d,
+        mastery_score=c.mastery_score,
+        weakness_score=c.weakness_score,
+    )
+
+
+@app.get("/analytics/dashboard", response_model=AnalyticsDashboardResponse)
+def analytics_dashboard() -> AnalyticsDashboardResponse:
+    repo = get_repo()
+    dashboard = get_dashboard(repo)
+    overview = dashboard.overview
+    return AnalyticsDashboardResponse(
+        overview=AnalyticsOverviewResponse(
+            retention_7d=overview.retention_7d,
+            retention_30d=overview.retention_30d,
+            cards_per_day_7d=overview.cards_per_day_7d,
+            avg_mastery=overview.avg_mastery,
+            streak_days=overview.streak_days,
+            due_today=overview.due_today,
+            reviewed_today=overview.reviewed_today,
+            total_cards=overview.total_cards,
+        ),
+        activity=[ActivityPointResponse(**row) for row in dashboard.activity],
+        retention_trend=[RetentionTrendPointResponse(**row) for row in dashboard.retention_trend],
+        ratings=[RatingBucketResponse(**row) for row in dashboard.ratings],
+        deck_workload=[DeckWorkloadResponse(**row) for row in dashboard.deck_workload],
+        mastery_top=[_concept_mastery_response(c) for c in dashboard.mastery_top],
+        mastery_bottom=[_concept_mastery_response(c) for c in dashboard.mastery_bottom],
+        retrievability_trend=[
+            RetrievabilityPointResponse(**row) for row in dashboard.retrievability_trend
+        ],
     )
 
 

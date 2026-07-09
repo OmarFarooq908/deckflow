@@ -4,6 +4,7 @@ from typing import Any
 
 from deckflow.db.repository import Repository
 from deckflow.models.domain import (
+    AnalyticsDashboard,
     AnalyticsOverview,
     ConceptMastery,
     ReviewFocus,
@@ -24,6 +25,21 @@ def get_overview(repo: Repository) -> AnalyticsOverview:
         due_today=repo.count_due(),
         reviewed_today=repo.count_reviewed_today(),
         total_cards=repo.count_total_cards(),
+    )
+
+
+def get_dashboard(repo: Repository) -> AnalyticsDashboard:
+    concepts = repo.list_concept_mastery()
+    sorted_by_mastery = sorted(concepts, key=lambda c: c.mastery_score, reverse=True)
+    return AnalyticsDashboard(
+        overview=get_overview(repo),
+        activity=repo.daily_activity(days=30),
+        retention_trend=repo.retention_trend(weeks=12),
+        ratings=repo.rating_distribution(days=30),
+        deck_workload=repo.deck_workload_by_prefix(depth=2),
+        mastery_top=sorted_by_mastery[:5],
+        mastery_bottom=sorted(concepts, key=lambda c: c.mastery_score)[:5],
+        retrievability_trend=repo.avg_retrievability_trend(days=30),
     )
 
 
