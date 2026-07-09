@@ -156,6 +156,7 @@ export interface TrackSummary {
 
 export interface LearningLibrary {
   collection: CollectionSummary | null;
+  collections: CollectionSummary[];
   modules: LibraryNode[];
   topics: LibraryNode[];
   tracks: TrackSummary[];

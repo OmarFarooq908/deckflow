@@ -27,12 +27,14 @@ class _TrieNode:
 
 
 def get_learning_library(repo: Repository) -> LearningLibrary:
-    collection = _build_collection_summary(repo)
+    collections = build_collection_summaries(repo)
+    primary = _primary_collection_summary(collections)
     modules = build_module_tree(repo)
     topics = build_topic_tree(repo)
     tracks = build_track_summaries(repo)
     return LearningLibrary(
-        collection=collection,
+        collection=primary,
+        collections=collections,
         modules=modules,
         topics=topics,
         tracks=tracks,
@@ -123,23 +125,36 @@ def build_topic_tree(repo: Repository) -> list[LibraryNode]:
 
 
 def build_track_summaries(repo: Repository) -> list[TrackSummary]:
-    collection = repo.get_latest_collection()
-    if not collection:
-        return []
-    tracks = collection.get("meta", {}).get("tracks", [])
-    if not isinstance(tracks, list):
+    collections = repo.list_collections()
+    if not collections:
         return []
 
+    multi = len(collections) > 1
     summaries: list[TrackSummary] = []
-    for raw in tracks:
-        if not isinstance(raw, dict):
+    for collection in collections:
+        tracks = collection.get("meta", {}).get("tracks", [])
+        if not isinstance(tracks, list):
             continue
-        track_id = str(raw.get("id", ""))
-        if not track_id:
-            continue
-        steps_raw = raw.get("steps", [])
-        step_summaries: list[TrackStepSummary] = []
-        current_step = 0
+        for raw in tracks:
+            if not isinstance(raw, dict):
+                continue
+            raw_track_id = str(raw.get("id", ""))
+            if not raw_track_id:
+                continue
+            track_id = f"{collection['slug']}::{raw_track_id}" if multi else raw_track_id
+            summaries.append(_build_track_summary(raw, track_id, repo))
+    return summaries
+
+
+def _build_track_summary(
+    raw: dict[str, object],
+    track_id: str,
+    repo: Repository,
+) -> TrackSummary:
+    steps_raw = raw.get("steps", [])
+    step_summaries: list[TrackStepSummary] = []
+    current_step = 0
+    if isinstance(steps_raw, list):
         for index, step in enumerate(steps_raw):
             if not isinstance(step, dict):
                 continue
@@ -162,48 +177,68 @@ def build_track_summaries(repo: Repository) -> list[TrackSummary]:
             elif completed and index == current_step and index + 1 < len(steps_raw):
                 current_step = index + 1
 
-        focus_deck, focus_concept = _step_focus(step_summaries, current_step)
+    focus_deck, focus_concept = _step_focus(step_summaries, current_step)
+    description_raw = raw.get("description")
+    description = description_raw if isinstance(description_raw, str) else None
+    return TrackSummary(
+        id=track_id,
+        title=str(raw.get("title", track_id)),
+        description=description,
+        current_step=min(current_step, max(len(step_summaries) - 1, 0)),
+        total_steps=len(step_summaries),
+        steps=step_summaries,
+        focus_deck_prefix=focus_deck,
+        focus_concept_slug=focus_concept,
+    )
+
+
+def get_track_focus(repo: Repository, track_id: str) -> ReviewFocus | None:
+    for track in build_track_summaries(repo):
+        if track.id != track_id and not track.id.endswith(f"::{track_id}"):
+            continue
+        return ReviewFocus(
+            deck_prefix=track.focus_deck_prefix,
+            concept_slug=track.focus_concept_slug,
+            track_id=track.id,
+        )
+    return None
+
+
+def build_collection_summaries(repo: Repository) -> list[CollectionSummary]:
+    summaries: list[CollectionSummary] = []
+    for collection in repo.list_collections():
         summaries.append(
-            TrackSummary(
-                id=track_id,
-                title=str(raw.get("title", track_id)),
-                description=raw.get("description"),
-                current_step=min(current_step, max(len(step_summaries) - 1, 0)),
-                total_steps=len(step_summaries),
-                steps=step_summaries,
-                focus_deck_prefix=focus_deck,
-                focus_concept_slug=focus_concept,
+            CollectionSummary(
+                id=collection["id"],
+                slug=collection["slug"],
+                title=collection["title"],
+                description=collection.get("description"),
+                due_count=repo.count_due_for_collection(collection["id"]),
+                card_count=repo.count_total_cards_for_collection(collection["id"]),
             )
         )
     return summaries
 
 
-def get_track_focus(repo: Repository, track_id: str) -> ReviewFocus | None:
-    for track in build_track_summaries(repo):
-        if track.id != track_id:
-            continue
-        return ReviewFocus(
-            deck_prefix=track.focus_deck_prefix,
-            concept_slug=track.focus_concept_slug,
-            track_id=track_id,
-        )
-    return None
+def _primary_collection_summary(
+    collections: list[CollectionSummary],
+) -> CollectionSummary | None:
+    if not collections:
+        return None
+    if len(collections) == 1:
+        return collections[0]
+    return CollectionSummary(
+        id=collections[0].id,
+        slug="all-collections",
+        title="All collections",
+        description=None,
+        due_count=sum(collection.due_count for collection in collections),
+        card_count=sum(collection.card_count for collection in collections),
+    )
 
 
 def _build_collection_summary(repo: Repository) -> CollectionSummary | None:
-    collection = repo.get_latest_collection()
-    if not collection:
-        return None
-    due = repo.count_due()
-    total = repo.count_total_cards()
-    return CollectionSummary(
-        id=collection["id"],
-        slug=collection["slug"],
-        title=collection["title"],
-        description=collection.get("description"),
-        due_count=due,
-        card_count=total,
-    )
+    return _primary_collection_summary(build_collection_summaries(repo))
 
 
 def _trie_to_library_node(node: _TrieNode) -> LibraryNode:

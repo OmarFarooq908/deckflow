@@ -10,6 +10,41 @@ from deckflow.models.domain import CardRow, QueueCard, ReviewFocus
 PRIORITY_WEIGHTS = {"high": 1.0, "normal": 0.5, "low": 0.2}
 
 
+def _collection_config(
+    repo: Repository,
+    collection_id: int | None,
+    cache: dict[int | None, dict[str, Any]],
+) -> dict[str, Any]:
+    if collection_id not in cache:
+        if collection_id is None:
+            config = repo.get_collection_config()
+        else:
+            config = repo.get_collection_config(collection_id)
+        cache[collection_id] = config
+    return cache[collection_id]
+
+
+def _collection_reviews_left(
+    repo: Repository,
+    collection_id: int | None,
+    now: datetime,
+    cache: dict[int | None, int],
+    config_cache: dict[int | None, dict[str, Any]],
+) -> int:
+    if collection_id not in cache:
+        if collection_id is None:
+            config = repo.get_collection_config()
+        else:
+            config = repo.get_collection_config(collection_id)
+        max_reviews = int(config.get("max_reviews_per_day", 150))
+        if collection_id is None:
+            reviewed = repo.count_reviewed_today_for_orphan_decks(now)
+        else:
+            reviewed = repo.count_reviewed_today_for_collection(collection_id, now)
+        cache[collection_id] = max(0, max_reviews - reviewed)
+    return cache[collection_id]
+
+
 def build_daily_queue(
     repo: Repository,
     limit: int = 20,
@@ -17,15 +52,22 @@ def build_daily_queue(
     focus: ReviewFocus | None = None,
 ) -> list[QueueCard]:
     now = now or datetime.now(UTC)
-    collection_config = repo.get_collection_config()
-    default_new_per_day = int(collection_config.get("new_per_day", 20))
-    max_reviews = int(collection_config.get("max_reviews_per_day", 150))
-    reviewed_today = repo.count_reviewed_today(now)
-    reviews_left = max(0, max_reviews - reviewed_today)
-    if reviews_left == 0:
+    collection_config_cache: dict[int | None, dict[str, Any]] = {}
+    collection_reviews_left: dict[int | None, int] = {}
+
+    total_reviews_left = sum(
+        _collection_reviews_left(
+            repo,
+            collection_id,
+            now,
+            collection_reviews_left,
+            collection_config_cache,
+        )
+        for collection_id in repo.get_active_collection_ids()
+    )
+    if total_reviews_left == 0:
         return []
-    limit = min(limit, reviews_left)
-    review_order = str(collection_config.get("review_order", "score"))
+    limit = min(limit, total_reviews_left)
 
     deck_prefix = focus.deck_prefix if focus else None
     concept_slug = focus.concept_slug if focus else None
@@ -48,6 +90,9 @@ def build_daily_queue(
             continue
         is_new = scheduling.reps == 0
         if is_new:
+            collection_id = repo.get_collection_id_for_deck(card.deck_id)
+            coll_cfg = _collection_config(repo, collection_id, collection_config_cache)
+            default_new_per_day = int(coll_cfg.get("new_per_day", 20))
             new_limit = int(card_config.get("new_per_day", default_new_per_day))
             if new_limit <= 0:
                 continue
@@ -67,6 +112,17 @@ def build_daily_queue(
 
     while pool and len(result) < limit:
         scored = [_score_card(card, repo, now, recent_concepts, focus) for card in pool]
+        collection_ids = {repo.get_collection_id_for_deck(card.deck_id) for card in pool}
+        if len(collection_ids) == 1:
+            review_order = str(
+                _collection_config(
+                    repo,
+                    next(iter(collection_ids)),
+                    collection_config_cache,
+                ).get("review_order", "score")
+            )
+        else:
+            review_order = "score"
         if review_order == "deck":
             best = min(
                 scored,
@@ -76,6 +132,19 @@ def build_daily_queue(
             best = random.choice(scored)
         else:
             best = max(scored, key=lambda item: item.score)
+
+        collection_id = repo.get_collection_id_for_deck(best.card.deck_id)
+        remaining_reviews = _collection_reviews_left(
+            repo,
+            collection_id,
+            now,
+            collection_reviews_left,
+            collection_config_cache,
+        )
+        if remaining_reviews <= 0:
+            pool = [card for card in pool if card.id != best.card.id]
+            continue
+        collection_reviews_left[collection_id] = remaining_reviews - 1
 
         scheduling = repo.get_scheduling(best.card.id)
         if scheduling is not None and scheduling.reps == 0:

@@ -33,18 +33,25 @@ export function LibraryPage() {
   }
 
   const collection = library.collection;
+  const collections =
+    library.collections.length > 0
+      ? library.collections
+      : collection
+        ? [collection]
+        : [];
+  const totalCards = collections.reduce((sum, item) => sum + item.card_count, 0);
+  const totalDue = collections.reduce((sum, item) => sum + item.due_count, 0);
   const progressPct =
-    collection && collection.card_count > 0
-      ? Math.round(
-          ((collection.card_count - collection.due_count) / collection.card_count) *
-            100,
-        )
-      : 0;
+    totalCards > 0 ? Math.round(((totalCards - totalDue) / totalCards) * 100) : 0;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <PageHeader
-        title={collection?.title ?? "Learning library"}
+        title={
+          collections.length === 1
+            ? collections[0].title
+            : collection?.title ?? "Learning library"
+        }
         subtitle="Browse modules, topics, and study tracks"
         action={
           <Button asChild>
@@ -53,11 +60,12 @@ export function LibraryPage() {
         }
       />
 
-      {collection && (
+      {collections.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-medium">
-              {collection.due_count} due · {collection.card_count} total cards
+              {totalDue} due · {totalCards} total cards
+              {collections.length > 1 ? ` across ${collections.length} collections` : ""}
             </CardTitle>
           </CardHeader>
           <CardContent>
