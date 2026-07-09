@@ -135,6 +135,33 @@ class CardsMixin:
         conn.commit()
         return card_id
 
+    def delete_cards_not_in(self, deck_id: int, keep_card_ids: set[int]) -> int:
+        conn = self.connect()
+        rows = conn.execute("SELECT id FROM cards WHERE deck_id = ?", (deck_id,)).fetchall()
+        removed = 0
+        for row in rows:
+            card_id = int(row["id"])
+            if card_id not in keep_card_ids:
+                conn.execute("DELETE FROM cards WHERE id = ?", (card_id,))
+                removed += 1
+        conn.commit()
+        return removed
+
+    def prune_decks_not_in(self, source_file: str, keep_deck_ids: set[int]) -> int:
+        conn = self.connect()
+        rows = conn.execute(
+            "SELECT id FROM decks WHERE source_file = ?",
+            (source_file,),
+        ).fetchall()
+        removed = 0
+        for row in rows:
+            deck_id = int(row["id"])
+            if deck_id not in keep_deck_ids:
+                conn.execute("DELETE FROM decks WHERE id = ?", (deck_id,))
+                removed += 1
+        conn.commit()
+        return removed
+
     def get_due_cards(self, limit: int, now: datetime | None = None) -> list[CardRow]:
         candidates = self.get_due_candidates(now=now)
         return candidates[:limit]
