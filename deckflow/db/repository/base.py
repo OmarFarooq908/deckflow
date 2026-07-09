@@ -15,7 +15,7 @@ class BaseRepository:
     def connect(self) -> sqlite3.Connection:
         if self._conn is None:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = sqlite3.connect(self.db_path)
+            self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA foreign_keys = ON")
         return self._conn
@@ -24,6 +24,9 @@ class BaseRepository:
         if self._conn is not None:
             self._conn.close()
             self._conn = None
+
+    def reset_active_session(self) -> None:
+        self._active_session_id = None
 
     def initialize(self) -> None:
         conn = self.connect()

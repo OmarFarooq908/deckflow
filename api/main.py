@@ -36,11 +36,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_repo_cache: dict[str, Repository] = {}
+
 
 def get_repo() -> Repository:
-    repo = Repository(get_db_path())
-    repo.initialize()
+    db_path = get_db_path()
+    key = str(db_path)
+    repo = _repo_cache.get(key)
+    if repo is None:
+        repo = Repository(db_path)
+        repo.initialize()
+        _repo_cache[key] = repo
     return repo
+
+
+def clear_repo_cache() -> None:
+    _repo_cache.clear()
 
 
 class ImportRequest(BaseModel):
@@ -82,6 +93,7 @@ class ReviewSubmitResponse(BaseModel):
     card_id: int
     due: str
     reps: int
+    session_id: int
 
 
 class StatsResponse(BaseModel):
@@ -263,6 +275,11 @@ def review_next(
     return _card_response(repo, card, reason)
 
 
+@app.post("/review/session/reset", status_code=204)
+def review_session_reset() -> None:
+    get_repo().reset_active_session()
+
+
 @app.post("/review/{card_id}", response_model=ReviewSubmitResponse)
 def review_submit(card_id: int, body: ReviewRequest) -> ReviewSubmitResponse:
     repo = get_repo()
@@ -285,6 +302,7 @@ def review_submit(card_id: int, body: ReviewRequest) -> ReviewSubmitResponse:
         card_id=result.card.id,
         due=result.due.isoformat(),
         reps=result.reps,
+        session_id=result.session_id,
     )
 
 
