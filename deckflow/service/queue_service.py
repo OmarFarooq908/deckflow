@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from deckflow.db.repository import Repository
 from deckflow.models.domain import CardRow, QueueCard, ReviewFocus
@@ -15,15 +16,15 @@ def build_daily_queue(
     focus: ReviewFocus | None = None,
 ) -> list[QueueCard]:
     now = now or datetime.now(UTC)
-    config = repo.get_collection_config()
-    new_per_day = int(config.get("new_per_day", 20))
-    max_reviews = int(config.get("max_reviews_per_day", 150))
+    collection_config = repo.get_collection_config()
+    default_new_per_day = int(collection_config.get("new_per_day", 20))
+    max_reviews = int(collection_config.get("max_reviews_per_day", 150))
     reviewed_today = repo.count_reviewed_today(now)
     reviews_left = max(0, max_reviews - reviewed_today)
     if reviews_left == 0:
         return []
     limit = min(limit, reviews_left)
-    review_order = str(config.get("review_order", "score"))
+    review_order = str(collection_config.get("review_order", "score"))
 
     deck_prefix = focus.deck_prefix if focus else None
     concept_slug = focus.concept_slug if focus else None
@@ -33,17 +34,31 @@ def build_daily_queue(
         deck_prefix=deck_prefix,
         concept_slug=concept_slug,
     )
-    new_today = repo.count_new_cards_today(now)
-    new_budget_left = max(0, new_per_day - new_today)
+    deck_new_remaining: dict[int, int] = {}
+    deck_config_cache: dict[int, dict[str, Any]] = {}
 
     pool: list[CardRow] = []
     for card in candidates:
         scheduling = repo.get_scheduling(card.id)
         if scheduling is None:
             continue
-        is_new = scheduling.reps == 0
-        if is_new and new_budget_left <= 0:
+        card_config = repo.get_scheduling_config_for_card(card.id)
+        if card_config.get("suspend"):
             continue
+        is_new = scheduling.reps == 0
+        if is_new:
+            new_limit = int(card_config.get("new_per_day", default_new_per_day))
+            if new_limit <= 0:
+                continue
+            deck_id = card.deck_id
+            if deck_id not in deck_new_remaining:
+                if deck_id not in deck_config_cache:
+                    deck_config_cache[deck_id] = repo.get_scheduling_config_for_deck(deck_id)
+                deck_limit = int(deck_config_cache[deck_id].get("new_per_day", default_new_per_day))
+                used = repo.count_new_cards_today_for_deck(deck_id, now)
+                deck_new_remaining[deck_id] = max(0, deck_limit - used)
+            if deck_new_remaining[deck_id] <= 0:
+                continue
         pool.append(card)
 
     result: list[QueueCard] = []
@@ -58,6 +73,16 @@ def build_daily_queue(
             )
         else:
             best = max(scored, key=lambda item: item.score)
+
+        scheduling = repo.get_scheduling(best.card.id)
+        if scheduling is not None and scheduling.reps == 0:
+            deck_id = best.card.deck_id
+            remaining = deck_new_remaining.get(deck_id)
+            if remaining is not None and remaining <= 0:
+                pool = [card for card in pool if card.id != best.card.id]
+                continue
+            if remaining is not None:
+                deck_new_remaining[deck_id] = remaining - 1
 
         result.append(best)
         pool = [card for card in pool if card.id != best.card.id]
