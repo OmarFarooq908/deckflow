@@ -18,13 +18,19 @@ from deckflow.service.queue_service import build_daily_queue, resolve_track_focu
 def get_next_card(
     repo: Repository,
     focus: ReviewFocus | None = None,
+    exclude_card_ids: set[int] | None = None,
+    queue_limit: int = 50,
 ) -> tuple[CardRow | None, str | None]:
     if focus and focus.track_id and not focus.deck_prefix and not focus.concept_slug:
         focus = resolve_track_focus(repo, focus.track_id) or focus
-    queue = build_daily_queue(repo, limit=1, focus=focus)
+    queue = build_daily_queue(repo, limit=queue_limit, focus=focus)
     if not queue:
         return None, None
-    return queue[0].card, queue[0].reason
+    excluded = exclude_card_ids or set()
+    for item in queue:
+        if item.card.id not in excluded:
+            return item.card, item.reason
+    return None, None
 
 
 def submit_review(
