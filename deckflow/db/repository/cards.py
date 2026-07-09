@@ -191,6 +191,10 @@ class CardsMixin:
         conditions = [
             "s.due <= ?",
             "COALESCE(json_extract(c.meta_json, '$.status'), 'active') != 'suspended'",
+            (
+                "(json_extract(c.meta_json, '$.card_config.suspend') IS NULL "
+                "OR json_extract(c.meta_json, '$.card_config.suspend') = json('false'))"
+            ),
         ]
         params: list[Any] = [now.isoformat()]
 
