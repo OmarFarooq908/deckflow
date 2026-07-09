@@ -5,6 +5,7 @@ import {
   Card as ApiCard,
   ReviewFocusParams,
   fetchNextCard,
+  resetReviewSession,
   submitReview,
 } from "@/api";
 import { DeckBreadcrumb } from "@/components/DeckBreadcrumb";
@@ -60,6 +61,12 @@ export function ReviewPage() {
   const [done, setDone] = useState(false);
   const shownAt = useRef<number>(Date.now());
   const revealedAt = useRef<number | null>(null);
+  const sessionId = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    sessionId.current = undefined;
+    void resetReviewSession().catch(() => undefined);
+  }, [deck, concept, track]);
 
   const loadNext = useCallback(async () => {
     setLoading(true);
@@ -107,7 +114,12 @@ export function ReviewPage() {
       ? now - revealedAt.current
       : undefined;
     try {
-      await submitReview(card.id, rating, { reveal_ms, rating_ms });
+      const result = await submitReview(card.id, rating, {
+        reveal_ms,
+        rating_ms,
+        session_id: sessionId.current,
+      });
+      sessionId.current = result.session_id;
       await refreshStats();
       await loadNext();
     } catch (err) {

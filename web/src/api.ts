@@ -185,12 +185,20 @@ export function fetchNextCard(focus?: ReviewFocusParams): Promise<Card | null> {
 export function submitReview(
   cardId: number,
   rating: number,
-  telemetry?: { reveal_ms?: number; rating_ms?: number },
-): Promise<{ card_id: number; due: string; reps: number }> {
+  telemetry?: {
+    reveal_ms?: number;
+    rating_ms?: number;
+    session_id?: number;
+  },
+): Promise<{ card_id: number; due: string; reps: number; session_id: number }> {
   return request(`/review/${cardId}`, {
     method: "POST",
     body: JSON.stringify({ rating, ...telemetry }),
   });
+}
+
+export function resetReviewSession(): Promise<void> {
+  return request<void>("/review/session/reset", { method: "POST" });
 }
 
 export function importDeck(
