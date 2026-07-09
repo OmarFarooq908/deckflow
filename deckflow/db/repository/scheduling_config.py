@@ -13,7 +13,13 @@ class SchedulingConfigMixin:
         conn = self.connect()
         row = conn.execute("SELECT meta_json FROM decks WHERE id = ?", (deck_id,)).fetchone()
         deck_meta = json.loads(row["meta_json"] or "{}") if row else {}
-        return merge_config(self.get_collection_config(), deck_meta.get("config", {}))
+        collection_id = self.get_collection_id_for_deck(deck_id)
+        collection_config = (
+            self.get_collection_config(collection_id)
+            if collection_id is not None
+            else self.get_collection_config()
+        )
+        return merge_config(collection_config, deck_meta.get("config", {}))
 
     def get_scheduling_config_for_card(self, card_id: int) -> dict[str, Any]:
         conn = self.connect()
@@ -26,7 +32,7 @@ class SchedulingConfigMixin:
             (card_id,),
         ).fetchone()
         if row is None:
-            return self.get_collection_config()
+            return {}
         card_meta = json.loads(row["meta_json"] or "{}")
         deck_config = self.get_scheduling_config_for_deck(int(row["deck_id"]))
         return merge_config(deck_config, card_meta.get("card_config", {}))

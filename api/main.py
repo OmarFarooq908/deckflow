@@ -239,6 +239,7 @@ class TrackSummaryResponse(BaseModel):
 
 class LearningLibraryResponse(BaseModel):
     collection: CollectionSummaryResponse | None = None
+    collections: list[CollectionSummaryResponse] = Field(default_factory=list)
     modules: list[LibraryNodeResponse]
     topics: list[LibraryNodeResponse]
     tracks: list[TrackSummaryResponse]
@@ -517,6 +518,17 @@ def library() -> LearningLibraryResponse:
         )
     return LearningLibraryResponse(
         collection=collection,
+        collections=[
+            CollectionSummaryResponse(
+                id=item.id,
+                slug=item.slug,
+                title=item.title,
+                description=item.description,
+                due_count=item.due_count,
+                card_count=item.card_count,
+            )
+            for item in lib.collections
+        ],
         modules=[_library_node(node) for node in lib.modules],
         topics=[_library_node(node) for node in lib.topics],
         tracks=[

@@ -229,6 +229,7 @@ class TrackSummary:
 @dataclass
 class LearningLibrary:
     collection: CollectionSummary | None
+    collections: list[CollectionSummary]
     modules: list[LibraryNode]
     topics: list[LibraryNode]
     tracks: list[TrackSummary]
