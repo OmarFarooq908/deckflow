@@ -6,7 +6,11 @@ from typing import Any
 
 from fsrs import Card, Rating, Scheduler, State
 
-_scheduler = Scheduler()
+DEFAULT_DESIRED_RETENTION = 0.9
+
+
+def get_scheduler(desired_retention: float = DEFAULT_DESIRED_RETENTION) -> Scheduler:
+    return Scheduler(desired_retention=desired_retention)
 
 
 def new_fsrs_card(card_id: int) -> Card:
@@ -21,11 +25,15 @@ def card_to_json(card: Card) -> str:
     return json.dumps(card.to_dict())
 
 
-def get_retrievability(card: Card, at: datetime | None = None) -> float:
+def get_retrievability(
+    card: Card,
+    at: datetime | None = None,
+    desired_retention: float = DEFAULT_DESIRED_RETENTION,
+) -> float:
     at = at or datetime.now(UTC)
     if at.tzinfo is None:
         at = at.replace(tzinfo=UTC)
-    return float(_scheduler.get_card_retrievability(card, at))
+    return float(get_scheduler(desired_retention).get_card_retrievability(card, at))
 
 
 def fsrs_snapshot(card: Card) -> dict[str, Any]:
@@ -43,14 +51,16 @@ def review_card(
     rating: int,
     review_datetime: datetime | None = None,
     elapsed_ms: int | None = None,
+    desired_retention: float = DEFAULT_DESIRED_RETENTION,
 ) -> tuple[Card, float]:
     card = card_from_json(fsrs_json)
     review_datetime = review_datetime or datetime.now(UTC)
     if review_datetime.tzinfo is None:
         review_datetime = review_datetime.replace(tzinfo=UTC)
 
-    retrievability = get_retrievability(card, review_datetime)
-    updated, _log = _scheduler.review_card(
+    scheduler = get_scheduler(desired_retention)
+    retrievability = float(scheduler.get_card_retrievability(card, review_datetime))
+    updated, _log = scheduler.review_card(
         card,
         Rating(rating),
         review_datetime=review_datetime,

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from deckflow.db.repository import Repository
+from deckflow.local_time import local_day_start
 from deckflow.models.domain import (
     CardRow,
     QueueCard,
@@ -11,7 +12,13 @@ from deckflow.models.domain import (
     ReviewResult,
     ReviewTelemetry,
 )
-from deckflow.scheduler.fsrs import card_from_json, card_to_json, fsrs_snapshot, review_card
+from deckflow.scheduler.fsrs import (
+    DEFAULT_DESIRED_RETENTION,
+    card_from_json,
+    card_to_json,
+    fsrs_snapshot,
+    review_card,
+)
 from deckflow.service.queue_service import build_daily_queue, resolve_track_focus
 
 
@@ -55,12 +62,15 @@ def submit_review(
     reviewed_at = datetime.now(UTC)
     pre_card = card_from_json(scheduling.fsrs_json)
     snapshot = fsrs_snapshot(pre_card)
+    card_config = repo.get_scheduling_config_for_card(card_id)
+    desired_retention = float(card_config.get("desired_retention", DEFAULT_DESIRED_RETENTION))
 
     updated, retrievability = review_card(
         scheduling.fsrs_json,
         rating,
         review_datetime=reviewed_at,
         elapsed_ms=elapsed_ms or telemetry.rating_ms,
+        desired_retention=desired_retention,
     )
 
     reps = scheduling.reps + 1
@@ -93,8 +103,27 @@ def submit_review(
         session_id=session_id,
     )
     repo.refresh_mastery_for_card(card_id)
+    _bury_related_cards(repo, card_id, reviewed_at)
 
     return ReviewResult(card=card, due=updated.due, reps=reps, session_id=session_id)
+
+
+def _bury_related_cards(repo: Repository, card_id: int, now: datetime) -> None:
+    config = repo.get_scheduling_config_for_card(card_id)
+    if not config.get("bury_related"):
+        return
+    related = config.get("related") or []
+    if not related:
+        return
+
+    related_ids: list[int] = []
+    for reference in related:
+        related_ids.extend(repo.find_card_ids_by_reference(str(reference)))
+    if not related_ids:
+        return
+
+    bury_until = local_day_start(now) + timedelta(days=1)
+    repo.bury_cards_until(sorted(set(related_ids)), bury_until)
 
 
 def get_queue(
