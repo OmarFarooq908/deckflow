@@ -4,6 +4,7 @@ from deckflow.db.repository.cards import CardsMixin
 from deckflow.db.repository.collections import CollectionsMixin
 from deckflow.db.repository.concepts import ConceptsMixin
 from deckflow.db.repository.reviews import ReviewsMixin
+from deckflow.db.repository.scheduling_config import SchedulingConfigMixin
 
 
 class Repository(
@@ -13,6 +14,7 @@ class Repository(
     CardsMixin,
     ReviewsMixin,
     AnalyticsMixin,
+    SchedulingConfigMixin,
 ):
     pass
 

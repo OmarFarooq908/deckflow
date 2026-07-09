@@ -67,6 +67,7 @@ module = [
     "deckflow.db.repository.cards",
     "deckflow.db.repository.reviews",
     "deckflow.db.repository.analytics",
+    "deckflow.db.repository.scheduling_config",
     "deckflow.db.repository",
 ]
 disable_error_code = ["attr-defined", "misc", "has-type", "no-any-return"]
